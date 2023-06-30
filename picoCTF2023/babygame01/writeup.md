@@ -7,7 +7,6 @@ The objective of the game seems to be to get to the flag which is the X on the b
 ![Output upon reaching the flag](images/babygameWriteup1.png)
 <br>
 Using Ghidra we get the following decompiler output
-<br>
 
 ```c
 /* WARNING: Function: __x86.get_pc_thunk.bx replaced with injection: get_pc_thunk_bx */
@@ -53,8 +52,6 @@ undefined4 main(void)
 }
 ```
 
-<br>
-
 **local_aa0** should be the map because the map has 30 x 90 = 2700 tiles. It is also passed to the map initialization function.
 We know the flag has coordinates 0x1d and 0x59 so from where the game checks for a win, we can see that **local_aac** and **local_aa8**  corresponds to the height and width of the player. Furthermore, the function init_player  shows that these are both initiated to 4. From init_player we can also see that a third variable is modified, this variable should be **local_aa4**. Near the end of main this value is checked against zero, if it is not zero, the win function is called, which will print out our flag. Because this variable is initiated to zero, we must find a way to change this value. 
 
@@ -71,7 +68,6 @@ void init_player(undefined4 *param_1)
 }
 ```
 
-<br>
 Now to rename some variables in the decompiler output and bundle the player data into a struct so we can more easily see what's happening. Note that all the fields in the struct are aligned to 4 bytes.
 <br>
 
@@ -120,7 +116,6 @@ undefined4 main(void)
 }
 ```
 
-<br>
 We see that we must first change winFlag before getting to the end of the map, our input is sent to the move_player function so it seems most promising to examine that.
 
 ```c
@@ -156,8 +151,7 @@ void move_player(playerStruct *player,char move,int map)
 }
 ```
 
-<br>
-The game starts by writing to the position the player is at with the value 0x23, or a dot ".". It then updates the position of the player based on the key pressed, there are also some special moves that can change the character the player is displayed as or move the player to the 'X'. Finally, the game writes player_tile to the area of the map which the player's new position. Because the game does not check if the player is moving out of bounds, we can get the game to write to areas outside of the map array. This means we can use this flaw to change the value of the win flag! The only thing we need to figure out now is the location of the winflag in memory relative to the beginning of the map.
+The game starts by writing to the position the player is at with the value 0x23, or a dot ".". It then updates the position of the player based on the key pressed, there are also some special moves that can change the character the player is displayed as or move the player to the 'X'. Finally, the game writes player_tile to the area of the map which is the player's new position. Because the game does not check if the player is moving out of bounds, we can get the game to write to areas outside of the map array. This means we can use this flaw to change the value of the win flag! The only thing we need to figure out now is the location of the winflag in memory relative to the beginning of the map.
 <br>
 
 ![Layout of all variables on stack](images/babygameWriteup7.png)
