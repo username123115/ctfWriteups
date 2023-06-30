@@ -54,6 +54,7 @@ undefined4 main(void)
 ```
 
 <br>
+
 **local_aa0** should be the map because the map has 30 x 90 = 2700 tiles. It is also passed to the map initialization function.
 We know the flag has coordinates 0x1d and 0x59 so from where the game checks for a win, we can see that **local_aac** and **local_aa8**  corresponds to the height and width of the player. Furthermore, the function init_player  shows that these are both initiated to 4. From init_player we can also see that a third variable is modified, this variable should be **local_aa4**. Near the end of main this value is checked against zero, if it is not zero, the win function is called, which will print out our flag. Because this variable is initiated to zero, we must find a way to change this value. 
 
