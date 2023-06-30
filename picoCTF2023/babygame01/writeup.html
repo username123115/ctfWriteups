@@ -304,8 +304,9 @@ find a way to change this value.</p>
 <p><br> Now to rename some variables in the decompiler output and bundle
 the player data into a struct so we can more easily see what’s
 happening. Note that all the fields in the struct are aligned to 4
-bytes. <br> <img src="images/babygameWriteup8.png" alt="playerStruct" />
-After cleaning up main:</p>
+bytes. <br></p>
+<p><img src="images/babygameWriteup8.png" alt="playerStruct" /> After
+cleaning up main:</p>
 <div class="sourceCode" id="cb3"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co">/* </span><span class="al">WARNING</span><span class="co">: Function: __x86.get_pc_thunk.bx replaced with injection: get_pc_thunk_bx */</span></span>
 <span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="co">/* </span><span class="al">WARNING</span><span class="co">: Globals starting with &#39;_&#39; overlap smaller symbols at the same address */</span></span>
 <span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -388,7 +389,8 @@ player is moving out of bounds, we can get the game to write to areas
 outside of the map array. This means we can use this flaw to change the
 value of the win flag! The only thing we need to figure out now is the
 location of the winflag in memory relative to the beginning of the map.
-<br> <img src="images/babygameWriteup7.png"
+<br></p>
+<p><img src="images/babygameWriteup7.png"
 alt="Layout of all variables on stack" /> <br> The base memory address
 of map is 0xaac - 0xaa0 = 0xc bytes above the base memory address of
 player, so in order to access the first field of player we would access
