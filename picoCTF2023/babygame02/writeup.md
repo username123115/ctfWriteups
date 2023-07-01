@@ -1,4 +1,5 @@
-PicoCTF Babygame02 Writeup: Like Babygame01, we are placed in a 30 x 90 grid
+PicoCTF Babygame02 Writeup: <br>
+Like Babygame01, we are placed in a 30 x 90 grid
 with a flag('X') placed on the bottom right corner. Upon reaching it, the
 game exits, but we do not get the flag.
 
@@ -37,8 +38,7 @@ undefined4 main(void)
 }
 ```
 
-
-Like before, **local_a9d** is the map, player height is **local_aa8**, and width is **local_a9d** based on the while conditionals, but this time there is no win flag. The game just exits after you reach the 'X', how are we supposed to get the game to pring out the flag?
+Like before, **local_a9d** is the map, player height is **local_aa8**, and width is **local_a9d** based on the while conditionals, but this time there is no win flag. The game just exits after you reach the 'X', how are we supposed to get the game to print out the flag?
 
 When looking at the symbol table, we see that win function is still there, it just isn't called by anything.
 
@@ -172,6 +172,6 @@ After like 5 attempts,
 ![Flag is given](images/pwn.png)
 
 
-We get the flag picoCTF{gamer_jump1ng_4r0unD_0c5d2789}
+We get the flag **picoCTF{gamer_jump1ng_4r0unD_0c5d2789}**
 
 
