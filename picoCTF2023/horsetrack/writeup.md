@@ -1,148 +1,337 @@
+*Disclaimer*: I didn't end up solving this challenge by myself and used the following writeups for help: <br>
+* https://github.com/AlexSutila/picoCTF-2023-writeups/blob/main/horsetrack/horsetrack.md
+* https://www.youtube.com/watch?v=6c4QSlJJADA&ab_channel=SloppyJoePirates
+
 picoCTF2023 Horsetrack writeup:
 From the challenge description this is heap exploitation? 
 This will be my first heap exploitation challenge, sounds fun!
 
-Had to have libc shared object and ld or won't run? Bash just says missing, 
-otherwise also need to chmod +x them too or permission denied
+## First impressions
 
-![add desc](images/firstImpression.png)
-I'm stupid and realize its asking for name length, not name
+Apart from proving an executable for us to examine, we are also provided with a libc shared object and ld-linux shared object file. The executable will not run unless these files exist and have their permissions changed to be executable.
 
+![add desc](images/firstImpressions.png)
+When you do something wrong (like entering a name when the game prompts for name length) the game just kicks you out. 
 
-Going over character limit does not break game???
+Going over the character limit when setting the horse name doesn't do anything, as it turns out the extra characters just get ignored. 
 ![add desc](images/weirdLengthThing.png)
 
-Anyways it took forever to add horses so I made this crappy script
-
-```python
-def addHorse(stable, length = 16, name = "hinohinohinohino"):
-	print(f"1\n{stable}\n{length}\n{name}")
-
-def dumbAddHorse(stable):
-	length = 16
-	name = "hihohihohihohi"
-	if (stable < 10):
-		name += "h"
-	print(f"1\n{stable}\n{length}\n{name}{stable}")
-	
-
-for i in range(8):
-	dumbAddHorse(i)
-```
-
-Then I ran `(python automate.py && cat) | ./vuln` before racing
-
-The horses all line up to race and go towards the finish line
+You must add horses in order to race, you can have a maximum of 18 horses as the stable index range is 0-17.
+After you have 5 or more horses added, you can start racing. The horses all line up to race and go towards the finish line as the game prints out a nice representation of the horses' positions on the field.
 ![horses](images/race.png)
 
-Long names get trunctuated to 16 chars it looks like
-![add desc](images/trunc.png)
-
-Exploring trunc more, it looks like it takes the first 16 characters to display when racing
+Long names get trunctuated to only 16 characters, it looks like it takes the first 16 characters of the horse name to display when racing, although when the winner is printed out we get the full name of the horse.
 ![add desc](images/trunctoBeg.png)
 
-More crappy python code used
-```python
-def addHorse(stable, length = 16, name = "hinohinohinohino"):
-	print(f"1\n{stable}\n{length}\n{name}")
+There is also a remove option that lets you remove an existing horse. 
 
-def dumbAddHorse(stable):
-	length = 20
-	name = "aaaaabbbbbcccccddd"
-	if (stable < 10):
-		name += "o"
-	print(f"1\n{stable}\n{length}\n{name}{stable}")
-	
+## Reversing the binary
 
-for i in range(8):
-	dumbAddHorse(i)
-```
-
-Ok how boring thats all cool and stuff but lets open it up in ghidra and see how it looks eh?
-Wtf where did all the symbols go (it is stripped file D:)
+Now that all features have been explored, lets open the game in ghidra and see how it looks. <br>
+Oh no where did all the symbols go (it is stripped file D:)
 ![add desc](images/noSymbols.png)
 
-Can still use entry to find main :D
+We can still use entry point to find main though, so its not too big of a deal! It seems main is located at `0x401c0c`
+![We find entry](images/findingEntry.png)
 
-Funny decompiler output!
-Wait a minute stuff being set up before we even get to horse selection prompt?!?!
-0x120 bytes malloc()ed to **local_18**, which is then passed to FUN_0040130f, FUN_00401b4d
-called without arguments before as another init to main?
+Lets go to main and take a look at whats happening
+
+```c
+/* WARNING: Switch with 1 destination removed at 0x00401cea */
+/* WARNING: Exceeded maximum restarts with more pending */
+
+undefined8 main(void)
+
+{
+  long in_FS_OFFSET;
+  uint local_24;
+  int local_20;
+  void *local_18;
+  long local_10;
+  
+  local_10 = *(long *)(in_FS_OFFSET + 0x28);
+  local_18 = malloc(0x120);
+  local_24 = 0;
+  local_20 = 0;
+  FUN_00401b4d();
+  FUN_0040130f(local_18);
+  while (local_20 == 0) {
+    puts("1. Add horse");
+    puts("2. Remove horse");
+    puts("3. Race");
+    puts("4. Exit");
+    printf("Choice: ");
+    __isoc99_scanf(&DAT_0040204b,&local_24);
+    if (local_24 < 5) {
+                    /* WARNING: Could not find normalized switch variable to match jumptable */
+                    /* WARNING: This code block may not be properly labeled as switch case */
+      FUN_00401a39(local_18);
+      uRam00000000004040ec = 1;
+    }
+    else {
+      puts("Invalid choice");
+    }
+  }
+  puts("Goodbye!");
+  if (local_10 == *(long *)(in_FS_OFFSET + 0x28)) {
+    return 0;
+  }
+                    /* WARNING: Subroutine does not return */
+  __stack_chk_fail();
+}
+```
+
+Before going on with analysis of the game I want to note that there should be a switch statement in the decompiler output, but Ghidra was unable to properly display it. I solve this later by using the switch override script and manually specifying the jump destinations. The version of Ghidra used was 10.3 and it seems 10.1.3 doesn't have this issue so downgrading would also fix this.
+
+0x120 bytes malloc()ed to **local_18**, which is then passed to **FUN_0040130f**, **FUN_00401b4d** is
+called without arguments and doesn't return anything, we'll have to look into that.
 
 **local_20** is checked against zero before the prompt screen appears and you are sent to goodbye
-if it is zero, it is init to zero so one of the 4 options must change its value, perhaps it is
-return value?
+if it is nonzero, it is init to zero so one of the 4 options must change its value which is probably whats responsible for kicking us out when we give the game incorrect inputs, I'll call it **exitCondition**
 
-**local_24** is probs user input
+**local_24** is probably user input seeing how it is read into, I'll rename it **userInput**.
 
-Lets look at FUN_00401b4d (stuff before 0x120 byte pointer array passed to other func)
-OHHHH
-so it sets stdin and stdout and stderr to be unbuffered, which is why the original idea of just doing
-python automate.py | ./vuln doesn't work, as there is the assumption that stdin is line buffered, otherwise
-it just eats up every character one by one!
+Lets look at **FUN_00401b4d** first, it is the one passed no arguments
+```c
+void FUN_00401b4d(void)
 
-Ok **local_1c** is 4 byte integer (or maybe 8 byte that only reads 4 bytes?) that gets 4 bytes of data
-from /dev/urandom, this value isn't returned so I have no clue why it does this. WAIT I UNDERSTNAD EVERYHTING
+{
+  long in_FS_OFFSET;
+  uint local_1c;
+  FILE *local_18;
+  long local_10;
+  
+  local_10 = *(long *)(in_FS_OFFSET + 0x28);
+  setbuf(stdin,(char *)0x0);
+  setbuf(stdout,(char *)0x0);
+  setbuf(stderr,(char *)0x0);
+  local_18 = fopen("/dev/urandom","r");
+  local_1c = 0;
+  fread(&local_1c,4,1,local_18);
+  fclose(local_18);
+  srand(local_1c);
+  if (local_10 != *(long *)(in_FS_OFFSET + 0x28)) {
+                    /* WARNING: Subroutine does not return */
+    __stack_chk_fail();
+  }
+  return;
+}
+```
 
-Ok so srand(x) does not make x a random number it sets x as the seed for random number gen rand(), **local_1c**
-is passed as argument to srand() so what this function also does is get a random value from /dev/urandom and set it
-as seed for pseudo random generator, maybe this is something we want to exploit? Explains why nothing is returned, this
-function just sets all input/output to unbuffered and gets random seed.
+It uses setbuf to change the type of buffering of the streams stdin, stdout, and stderr to unbuffered. I'm not too sure what difference this makes.
 
-Ok now to explore that weird **FUN_0040130f** that takes in the big buffer as input
-Next daaaaay
-Looking structure editor turns out int is 32 bit not 64 bit even if program is 64 bit
-Init 0x120 byte array function divides array into 0x12 segments with 0x10 bytes looks like
+**local_1c** is an integer that gets filled with data from /dev/urandom, it is then passed to srand, which sets the random seed for rand() meaning it just sets the seed of rand using 4 bytes of data from /dev/urandom
+
+Ok that function wasn't too interesting but its good to take a look at everything.
+
+Next we'll look at **FUN_0040130f** that takes the 0x120 byte buffer as input
+
+```c
+void FUN_0040130f(long param_1)
+
+{
+  int i;
+  
+  for (i = 0; i < 0x12; i = i + 1) {
+    *(undefined8 *)(param_1 + (long)i * 0x10) = 0;
+    *(int *)(param_1 + (long)i * 0x10 + 8) = i;
+    *(undefined4 *)(param_1 + (long)i * 0x10 + 0xc) = 0;
+  }
+  return;
+}
+```
+
+It seems it divides these 0x120 bytes into 0x12 segments with 0x10 bytes each
 
 `0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 |valc 0x00 0x00 0x00| 0x00 0x00 0x00 0x00`
 
-Now to look at ghidra broken switch analysis
-There is very confusing switch that involves the value 0x402288
-
-First it takes user input (1-4) and multiplies by four and adds to 0x402288, this means 0x402288 is a table,
-it is an array with 4 undefined four byte numbers. They are probably addresses, wait they are four bytes they
-can't be addresses. lets look at this array and see what values there are:
-
-`0xfffffa65 0xfffffa80 0xfffffaa0 0xfffffac0` 
-
-hmmm, if they are signed we have
-
-`-0x59b -0x580 -0x560 -0x540` Why does -0x59b not 0x20 above others???
-
-Wait first choice is 1 therefore actually array needs an extra because we start indexing at table[1] to table[4]
-add `0xfffffb7a` or `-0x486`? what
-
-Calculating the addresses our numbers jump to are (from 1 to 4):
-
-`0x401d08 0x401d28 0x401d48 0x401e02` and zero option is 0x401ced
-
-After looking at the table I realized I had not tried 0 as an input yet and so, trying lead to interesting results
-
-Ok I fixed the weird issue by defining 0x401d08-0x401d27 as a function and it fixes weird warning? wtf?
-
-![weird segfault](images/firstSignOfpwn.png)
-
-I FIXED THE SWITCH PROBLEM!!!
-There is a script in script manager window called switchOverride that you can run after selecting the initial jump and
-all the possible addresses that the switch will jump to, it looks way janky now but I think it works!
-
-Now looking at case 1 add horse:
-It returns uVar2 which is set to zero when you give it an incorrect input, which main then uses to
-kick you out of the game
-
-Looks like 0x120 byte heap data is actually a table of 0x12 structs of size 0x10 that contains in order: 
-```c
-char* name;
-int stableIndex; //actually this should be horsePosition
-int nameLength;;
-```
-
-Here is image of horses after being init on heap
+Here is image of horses after being setup on the heap
 ![horses](images/initHorses.png)
 
-Hmmmmmm setHorse() function looks vulnerable because it just writes whatever to memory
-address pointed to by the name buffer, perhaps can overflow name buffer to point to have
-it point to some return value and pop shell?
+This suggests that **local_18** might be an array with 0x12 elements, although there are multiple data types in each element. 0x12 is 18 in decimal, and we can have at most 18 horses, this means that **local_18** is an array of horse data structures. Based on how the function acts on this array, it seems that each horse data structure contains one 8 byte field and two 4 byte fields. Ok lets rename **local_18** to **horseData** and make it of type horseStruct*
+
+![horses](images/horseInformation.png)
+
+### Addressing broken switches
+Most people won't have this problem I had, but I think i'm still going to include this section because it was something I had to solve in order to complete this challenge. You can skip this section if you want to, its not very important for solving this challenge in general.
+
+Ghidra wasn't able to display the switch that involved basically all of the game logic so I had to take a look at some of the assembly instructions to figure out what was happening.
+![switch instructions](images/switchInstructions.png)
+
+As you can see, Ghidra isn't able to dissasemble any of the  bytes beyond where the different switch cases start. Looking at the instructions, a jump table is used to determine the addresses to jump to. This table is located at **0x402288** and consists of signed 4 byte integers.  The game adds these integers to the base address of the jump table, and because the jump table is so close to where the instructions to jump to are, it only needs to use 4 byte integers instead of 8 byte long integers. 
+
+The jump table values are:
+
+```0xfffffa65 0xfffffa80 0xfffffaa0 0xfffffac0 0xfffffb7a```
+
+Signed they are:
+
+```-0x59b -0x580 -0x560 -0x540 -0x486```
+
+Note that there are 5 values because there is actually 5 options! Apart from the options 1-4 the game tells us about, there is also an option 0.
+
+Adding these numbers to the address of the jump table, we get the following addresses to jump to:
+
+```0x401ced 0x401d08 0x401d28 0x401d48 0x401e02``` 
+
+After disassembling the undisassembled bytes and highlighting these addresses for the switch override script, the switch shows up!
+
+The switch looks quite janky, but it goes from 0-4 for input from top to bottom.
+
+```c
+
+undefined8 main(void)
+
+{
+  int iVar1;
+  undefined8 uVar2;
+  long in_FS_OFFSET;
+  uint input;
+  int exitCondition;
+  int iStack_1c;
+  horseStruct *horseData;
+  long local_10;
+  
+  local_10 = *(long *)(in_FS_OFFSET + 0x28);
+  horseData = (horseStruct *)malloc(0x120);
+  input = 0;
+  exitCondition = 0;
+  FUN_00401b4d();
+  FUN_0040130f(horseData);
+  while (exitCondition == 0) {
+    puts("1. Add horse");
+    puts("2. Remove horse");
+    puts("3. Race");
+    puts("4. Exit");
+    printf("Choice: ");
+    __isoc99_scanf("%d",&input);
+    if (input < 5) {
+                    /* WARNING: Switch is manually overridden */
+      switch(jumpTable[input]) {
+      case -0x59b:
+        FUN_00401a39(horseData);
+        DAT_004040ec = 1;
+        break;
+      case -0x580:
+        iVar1 = addHorse(horseData);
+        if (iVar1 == 0) {
+          exitCondition = 1;
+        }
+        break;
+      case -0x560:
+        iVar1 = removeHorse(horseData);
+        if (iVar1 == 0) {
+          exitCondition = 1;
+        }
+        break;
+      case -0x540:
+        if (DAT_004040ec == 0) {
+          iVar1 = FUN_00401660(horseData);
+          if (iVar1 == 0) {
+            puts("Not enough horses to race");
+          }
+          else {
+            while (iVar1 = FUN_004016b1(horseData), iVar1 == 0) {
+              FUN_004017af(horseData);
+              FUN_00401854(horseData);
+            }
+            uVar2 = FUN_00401715(horseData);
+            printf("WINNER: %s\n\n",uVar2);
+            for (iStack_1c = 0; iStack_1c < 0x12; iStack_1c = iStack_1c + 1) {
+              horseData[iStack_1c].horseShort1 = 0;
+            }
+          }
+        }
+        else {
+          puts("You have been caught cheating!");
+          exitCondition = 1;
+        }
+        break;
+      case -0x486:
+        exitCondition = 1;
+      }
+    }
+    else {
+      puts("Invalid choice");
+    }
+  }
+  puts("Goodbye!");
+  if (local_10 == *(long *)(in_FS_OFFSET + 0x28)) {
+    return 0;
+  }
+                    /* WARNING: Subroutine does not return */
+  __stack_chk_fail();
+}
+```
+
+### Player options
+Now that the switch and all the logic inside of it is displaying, we can take a look at the switch cases!
+
+There are two functions I already named in the above code called addHorse() and removeHorse(), this is because they are fairly easy to find out based on what they print.
+
+#### Add Horse
+```c
+
+undefined8 addHorse(horseStruct *horse)
+
+{
+  uint uVar1;
+  undefined8 uVar2;
+  void *pvVar3;
+  long in_FS_OFFSET;
+  uint stableIndex;
+  int nameLength;
+  long local_20;
+  
+  local_20 = *(long *)(in_FS_OFFSET + 0x28);
+  stableIndex = 0;
+  nameLength = 0;
+  printf("Stable index # (0-%d)? ",0x11);
+  __isoc99_scanf("%d",&stableIndex);
+  if (((int)stableIndex < 0) || (0x11 < (int)stableIndex)) {
+    puts("Invalid stable index");
+    uVar2 = 0;
+  }
+  else if (horse[(int)stableIndex].horseShort2 == 0) {
+    printf("Horse name length (%d-%d)? ",0x10,0x100);
+    __isoc99_scanf("%d",&nameLength);
+    uVar1 = stableIndex;
+    if ((nameLength < 0x10) || (0x100 < nameLength)) {
+      puts("Invalid horse name length");
+      uVar2 = 0;
+    }
+    else {
+      pvVar3 = malloc((long)(nameLength + 1));
+      horse[(int)uVar1].horseLong = pvVar3;
+      if (horse[(int)stableIndex].horseLong == 0) {
+        puts("Failed to allocate memory for horse name");
+        uVar2 = 0;
+      }
+      else {
+        FUN_00401226(horse[(int)stableIndex].horseLong,nameLength);
+        horse[(int)stableIndex].horseShort2 = 1;
+        printf("Added horse to stable index %d\n",(ulong)stableIndex);
+        uVar2 = 1;
+      }
+    }
+  }
+  else {
+    puts("Stable location already in use");
+    uVar2 = 0;
+  }
+  if (local_20 != *(long *)(in_FS_OFFSET + 0x28)) {
+                    /* WARNING: Subroutine does not return */
+    __stack_chk_fail();
+  }
+  return uVar2;
+}
+```
+
+First the game recieves the stable index, which it indexes into horseData with. There is no overflow here because it checks if the stable index is within the bounds of the array. When the game gets the stable index, it checks if one of its fields **horseShort2** is set to zero, if its not, it tells us the stable location is already in use and returns a nonzero value, this will cause **exitCondition** to be set to something other then zero and kick us out of the game. If **horseShort2** isn't set, it checks for a name length to see if its within bounds (16-256) and allocates a buffer in heap to store the horse's name. It sets the horse's **horseLong** field to the buffer's address meaning that **horseLong** is a pointer to its name. The function **FUN_00401226** is tasked with populating this buffer with a name, it is passed the length of the name and the buffer address. Afterwards it sets **horseShort2** to 1 and returns. This means **horseShort2** marks whether a horse is in use.
+Now we can update horseStruct
+
+![updated horse struct](images/horseInformation2.png)
+
 
 In race there is function I name checkForEnd that lookas at one of the numbers set in initheap
 and sees if one is above 0x1d so I think its not actually stableIndex but position of horse
@@ -279,75 +468,8 @@ appear as end of chain). Afterwards we can allocate a chunk of same size as bin 
 T1 points, giving us the ability to write to 0x404010. 
 
 
-```c
-/* WARNING: Switch with 1 destination removed at 0x00401cea */
-/* WARNING: Exceeded maximum restarts with more pending */
 
-undefined8 main(void)
 
-{
-  long in_FS_OFFSET;
-  uint local_24;
-  int local_20;
-  void *local_18;
-  long local_10;
-  
-  local_10 = *(long *)(in_FS_OFFSET + 0x28);
-  local_18 = malloc(0x120);
-  local_24 = 0;
-  local_20 = 0;
-  FUN_00401b4d();
-  FUN_0040130f(local_18);
-  while (local_20 == 0) {
-    puts("1. Add horse");
-    puts("2. Remove horse");
-    puts("3. Race");
-    puts("4. Exit");
-    printf("Choice: ");
-    __isoc99_scanf(&DAT_0040204b,&local_24);
-    if (local_24 < 5) {
-                    /* WARNING: Could not find normalized switch variable to match jumptable */
-                    /* WARNING: This code block may not be properly labeled as switch case */
-      FUN_00401a39(local_18);
-      uRam00000000004040ec = 1;
-    }
-    else {
-      puts("Invalid choice");
-    }
-  }
-  puts("Goodbye!");
-  if (local_10 == *(long *)(in_FS_OFFSET + 0x28)) {
-    return 0;
-  }
-                    /* WARNING: Subroutine does not return */
-  __stack_chk_fail();
-}
-```
 
-```c
-void FUN_00401b4d(void)
-
-{
-  long in_FS_OFFSET;
-  uint local_1c;
-  FILE *local_18;
-  long local_10;
-  
-  local_10 = *(long *)(in_FS_OFFSET + 0x28);
-  setbuf(stdin,(char *)0x0);
-  setbuf(stdout,(char *)0x0);
-  setbuf(stderr,(char *)0x0);
-  local_18 = fopen("/dev/urandom","r");
-  local_1c = 0;
-  fread(&local_1c,4,1,local_18);
-  fclose(local_18);
-  srand(local_1c);
-  if (local_10 != *(long *)(in_FS_OFFSET + 0x28)) {
-                    /* WARNING: Subroutine does not return */
-    __stack_chk_fail();
-  }
-  return;
-}
-```
 
 
