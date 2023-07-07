@@ -154,8 +154,7 @@ This suggests that **local_18** might be an array with 0x12 elements, although t
 
 ### Addressing broken switches
 Most people won't have this problem I had, but I think i'm still going to include this section because it was something I had to solve in order to complete this challenge. You can skip this section if you want to, its not very important for solving this challenge in general.
-
-Ghidra wasn't able to display the switch that involved basically all of the game logic so I had to take a look at some of the assembly instructions to figure out what was happening.
+Ghidra wasn't able to display the switch that involved basically all of the game logic so I had to take a look at some of the assembly instructions to figure out what was happening.<br>
 ![switch instructions](images/switchInstructions.png)
 
 As you can see, Ghidra isn't able to dissasemble any of the  bytes beyond where the different switch cases start. Looking at the instructions, a jump table is used to determine the addresses to jump to. This table is located at **0x402288** and consists of signed 4 byte integers.  The game adds these integers to the base address of the jump table, and because the jump table is so close to where the instructions to jump to are, it only needs to use 4 byte integers instead of 8 byte long integers. 
@@ -269,7 +268,7 @@ Now that the switch and all the logic inside of it is displaying, we can take a 
 
 There are two functions I already named in the above code called addHorse() and removeHorse(), this is because they are fairly easy to find out based on what they print.
 
-#### Add Horse
+#### Add Horse - Option 1
 ```c
 
 undefined8 addHorse(horseStruct *horse)
@@ -332,6 +331,313 @@ Now we can update horseStruct
 
 ![updated horse struct](images/horseInformation2.png)
 
+Lets rename **FUN_00401226** to **setHorseName** and take a look at what it does
+
+```c
+
+void setHorseName(char *horseName,uint length)
+
+{
+  int iVar1;
+  char *write;
+  char input;
+  int i;
+  
+  printf("Enter a string of %d characters: ",(ulong)length);
+  i = 0;
+  write = horseName;
+  while( true ) {
+    if ((int)length <= i) {
+      do {
+        iVar1 = getchar();
+      } while ((char)iVar1 != '\n');
+      *write = '\0';
+      return;
+    }
+    iVar1 = getchar();
+    input = (char)iVar1;
+    while (input == '\n') {
+      iVar1 = getchar();
+      input = (char)iVar1;
+    }
+    if (input == -1) break;
+    *write = input;
+    i = i + 1;
+    write = write + 1;
+  }
+  return;
+}
+```
+
+As expected, the function gets a name from the player less then the length argument and puts it in a buffer. If the name is greater then **length** it will just ignore excess characters. One interesting thing about this function is that is when the game checks input against -1. Because input is a char, this is equivalent to checking input against 0xff. If the player sends "\xff" the function stops scanning for characters and returns. This means we can add a horse without overriding any data in the chunk the game malloc()s for us. Because the game prints out the data in this chunk when racing, we can use this to leak heap metadata.
+
+#### Remove Horse - Option 2
+
+```c
+undefined8 removeHorse(horseStruct *horseData)
+
+{
+  undefined8 uVar1;
+  long in_FS_OFFSET;
+  uint stableIndex;
+  long local_10;
+  
+  local_10 = *(long *)(in_FS_OFFSET + 0x28);
+  stableIndex = 0;
+  printf("Stable index # (0-%d)? ",0x11);
+  __isoc99_scanf("%d",&stableIndex);
+  if (((int)stableIndex < 0) || (0x11 < (int)stableIndex)) {
+    puts("Invalid stable index");
+    uVar1 = 0;
+  }
+  else if (horseData[(int)stableIndex].horseUsed == 0) {
+    puts("Stable location not in use");
+    uVar1 = 0;
+  }
+  else {
+    free(horseData[(int)stableIndex].horseName);
+    horseData[(int)stableIndex].horseUsed = 0;
+    printf("Removed horse from stable index %d\n",(ulong)stableIndex);
+    uVar1 = 1;
+  }
+  if (local_10 != *(long *)(in_FS_OFFSET + 0x28)) {
+                    /* WARNING: Subroutine does not return */
+    __stack_chk_fail();
+  }
+  return uVar1;
+}
+```
+
+Remove horse asks the player for a valid number to index into the **horseData** array with. It checks if the horse there is currently being used (has a name allocated) via the **horseUsed**. If the horse has been used, it free()s the the buffer containing th horse's name and sets the horse's **horseUsed** field to 0 indicating that the player can add a horse in that stable now. There is a vulnerability here as the freed pointer does not get set to NULL, so any functions that use the horse's name will be accessing freed memory. 
+
+#### Cheating - Option 0
+```c
+      case -0x59b:
+        FUN_00401a39(horseData);
+        DAT_004040ec = 1;
+        break;
+```
+
+The game has a secret option for when you give it zero as a choice, it doesn't tell you about this when it prompts you for a choice. It lets you set the first 16 characters of your horse's name to something different and change their "spot". However, the game will not let you race after you do this and says you are cheating. This is because in the code above, **DAT_004040ec** is set and the game checks this variable before racing. I will rename **DAT_004040ec** to **cheating** and the function that is called to **cheat**
+
+![cheating](images/cheating.png)
+
+Lets take a look at what the cheat function does
+
+```c
+void cheat(horseStruct *horseData)
+
+{
+  long in_FS_OFFSET;
+  uint stableIndex;
+  undefined4 spot;
+  long local_10;
+  
+  local_10 = *(long *)(in_FS_OFFSET + 0x28);
+  stableIndex = 0;
+  spot = 0;
+  puts("You may try to take a head start, if you get caught you will be banned from the races!");
+  printf("Stable index # (0-%d)? ",0x11);
+  __isoc99_scanf("%d",&stableIndex);
+  if (((int)stableIndex < 0) || (0x11 < (int)stableIndex)) {
+    puts("Invalid stable index");
+  }
+  else {
+    setHorseName(horseData[(int)stableIndex].horseName,0x10);
+    printf("New spot? ");
+    __isoc99_scanf("%d",&spot);
+    horseData[(int)stableIndex].horseShort1 = spot;
+    printf("Modified horse in stable index %d\n",(ulong)stableIndex);
+  }
+  if (local_10 != *(long *)(in_FS_OFFSET + 0x28)) {
+                    /* WARNING: Subroutine does not return */
+    __stack_chk_fail();
+  }
+  return;
+}
+```
+
+After taking the horse to perform the cheat on, the game calls **setHorseName** with length argument 0x10, meaning the first 16 characters of the horse's name will be changed (unless the player inputs "\xff"). Unlike **addHorse**, this function does not check if the horse is in use (thus has an allocated **horseName**) before calling **setHorseName**. This means if we call **cheat** on a horse we previously removed, we will be editing the metadata of a freed chunk! 
+
+Afterwards the player is asked to set a "New spot" which the game sets the target horse's **horseShort1** field, it seems like this field represents the position of the horse. Now we have all the information about the contents of the horse data structures contained in the **horseData** array.
+
+![add data](images/horseStructFinished.png)
+
+#### Race - Option 3
+```c
+      case -0x540:
+        if (cheating == 0) {
+          iVar1 = FUN_00401660(horseData);
+          if (iVar1 == 0) {
+            puts("Not enough horses to race");
+          }
+          else {
+            while (iVar1 = FUN_004016b1(horseData), iVar1 == 0) {
+              FUN_004017af(horseData);
+              FUN_00401854(horseData);
+            }
+            uVar2 = FUN_00401715(horseData);
+            printf("WINNER: %s\n\n",uVar2);
+            for (iStack_1c = 0; iStack_1c < 0x12; iStack_1c = iStack_1c + 1) {
+              horseData[iStack_1c].horseSpot = 0;
+            }
+          }
+        }
+        else {
+          puts("You have been caught cheating!");
+          exitCondition = 1;
+        }
+        break;
+```
+
+Before racing, the game makes a few checks
+
+First, it checks whether or not **cheating** is set, it should not be set unless the player has used option 0 and modified the spot of a horse. If it is set, the game prints out "You have been caught cheating!" and exits.
+
+Second, it calls **FUN_00401660** and checks if the return have is not zero, if it is zero the game tells us we do not have enough horses. This function counts how many horses have their **horseUsed** field set and returns whether or not that value is greater than 4. I named it **enoughHorses**
+```c
+
+bool enoughHorses(horseStruct *horseData)
+
+{
+  int horses;
+  int i;
+  
+  horses = 0;
+  for (i = 0; i < 0x12; i = i + 1) {
+    if (horseData[i].horseUsed != 0) {
+      horses = horses + 1;
+    }
+  }
+  return 4 < horses;
+}
+
+```
+
+The condition of the while statement is whether or not the return value of **FUN_004016b1** is 0, this function is passed the **horseData** array. It checks if any of the racing horses have their **horseSpot** at a value greater then or equal to `0x1d`, or `29`, if a horse has crossed this value  then it means it has crossed the finish line and the function returns 1. Otherwise, the horses are still racing and it returns 0.
+
+```c
+undefined8 horseWin(horseStruct *horseData)
+
+{
+  int i;
+  
+  i = 0;
+  while( true ) {
+    if (0x11 < i) {
+      return 0;
+    }
+    if ((horseData[i].horseUsed != 0) && (0x1d < (int)horseData[i].horseSpot)) break;
+    i = i + 1;
+  }
+  return 1;
+}
+```
+
+While the horses are racing, two functions are called, one is to update the spots of the horses, and one is to print them on the screen.
+FUN_004017af(horseData);
+FUN_00401854(horseData);
+
+**FUN_004017af** updates horse positions, I'll name it **moveHorses** It goes through every horse and sees if they're in use, if they are it moves the horses 1-5 spots forward.
+
+```c
+void moveHorses(horseStruct *horseData)
+
+{
+  int iVar1;
+  int i;
+  
+  for (i = 0; i < 0x12; i = i + 1) {
+    if (horseData[i].horseUsed != 0) {
+      iVar1 = rand();
+      horseData[i].horseSpot = iVar1 % 5 + 1 + horseData[i].horseSpot;
+    }
+  }
+  return;
+}
+```
+
+**FUN_00401854** prints out all the horses, I'll name it **printHorses**. It takes all horses' names and prints out the first 16 characters of them. It represents their spots by printing spaces before the names, the finish line at spot 0x1e is represented by a "|". Horses that are not in use are represented by a bunch of spaces folowed by the finish line. The function also sleeps for 1 second so that the entire race doesn't get printed out instantly.
+
+```c
+
+void printHorses(horseStruct *horseData)
+
+{
+  int iVar1;
+  size_t sVar2;
+  int i;
+  int spacesBeforeName;
+  int horseNames;
+  int spacesAfterName;
+  int emptyHorse;
+  
+  for (i = 0; i < 0x12; i = i + 1) {
+    if (horseData[i].horseUsed == 0) {
+      for (emptyHorse = 0; emptyHorse < 0x1e; emptyHorse = emptyHorse + 1) {
+        putc(0x20,stdout);
+      }
+      putc(0x7c,stdout);
+    }
+    else {
+      sVar2 = strnlen(horseData[i].horseName,0x10);
+      iVar1 = (int)sVar2;
+      for (spacesBeforeName = 0; spacesBeforeName < (int)horseData[i].horseSpot;
+          spacesBeforeName = spacesBeforeName + 1) {
+        putc(0x20,stdout);
+      }
+      for (horseNames = 0; horseNames < iVar1; horseNames = horseNames + 1) {
+        putc((int)horseData[i].horseName[horseNames],stdout);
+      }
+      if (iVar1 + horseData[i].horseSpot < 0x1e) {
+        for (spacesAfterName = 0; spacesAfterName < (0x1e - horseData[i].horseSpot) - iVar1;
+            spacesAfterName = spacesAfterName + 1) {
+          putc(0x20,stdout);
+        }
+        putc(0x7c,stdout);
+      }
+    }
+    putc(10,stdout);
+  }
+  puts("\n");
+  sleep(1);
+  return;
+}
+```
+
+Once the race ends, the game prints out the name of the winning horse and sets all horse's spots back to zero. The game calls **FUN_00401715** to get the name of the winning horse. I will call this **getWinningHorse**
+
+```c
+char * getWinningHorse(horseStruct *horseData)
+
+{
+  int highestSpot;
+  int horse;
+  int i;
+  
+  highestSpot = 0;
+  horse = 0;
+  for (i = 0; i < 0x12; i = i + 1) {
+    if ((horseData[i].horseUsed != 0) && (highestSpot < (int)horseData[i].horseSpot)) {
+      highestSpot = horseData[i].horseSpot;
+      horse = i;
+    }
+  }
+  return horseData[horse].horseName;
+}
+```
+
+#### Exit - Option 4
+Not much to say about this, it just sets **exitCondition** and causes you to *exit*
+
+```c
+      case -0x486:
+        exitCondition = 1;
+      }
+```
+
+## Exploiting the game
+~~omg finally exploiting game after like a billion lines of text~~
 
 In race there is function I name checkForEnd that lookas at one of the numbers set in initheap
 and sees if one is above 0x1d so I think its not actually stableIndex but position of horse
