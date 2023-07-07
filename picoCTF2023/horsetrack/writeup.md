@@ -1,6 +1,6 @@
 *Disclaimer*: I didn't end up solving this challenge by myself and used the following writeups for help: <br>
-* https://github.com/AlexSutila/picoCTF-2023-writeups/blob/main/horsetrack/horsetrack.md
-* https://www.youtube.com/watch?v=6c4QSlJJADA&ab_channel=SloppyJoePirates
+*Alex Sutila's writeup https://github.com/AlexSutila/picoCTF-2023-writeups/blob/main/horsetrack/horsetrack.md
+*SloppyJoePirate's video writeup https://www.youtube.com/watch?v=6c4QSlJJADA&ab_channel=SloppyJoePirates
 
 picoCTF2023 Horsetrack writeup:
 From the challenge description this is heap exploitation? 
@@ -637,7 +637,105 @@ Not much to say about this, it just sets **exitCondition** and causes you to *ex
 ```
 
 ## Exploiting the game
-~~omg finally exploiting game after like a billion lines of text~~
+~~omg finally pwn after like a billion lines of text~~
+
+*At this point I was a bit lost so I had to rely heavily on the two writeups I listed at the beginning. The method I used to pop shell is the same as the one SloppyJoePirates uses*
+
+The game does not have a win function or anything that accesses the flag, so we need to pop a shell to read the flag. We can do many things to achieve this goal, the way I'll be using is overriding a Global Offset Table entry to point to system and passing "/bin/sh" as the argument to the function who's entry we changed. In order to do this there are some hurdles we must overcome. 
+
+* Gain arbitrary write so we can overwrite GOT
+* Leak libc addresses so we can find the address of system
+* Find a way to pass a char pointer to "/bin/sh" to the function we modified
+
+### Gaining Arbitrary Write
+
+We need to find a way to write to the Global Offset Table. To do this, we can abuse the tcache bins. tcache bins can only hold 7 chunks each. Most freed chunks should go to the tcache bins first unless these bins are full, this means we want to attack them first. 
+#### tcache
+
+tcache bins are singly linked meaning the chunks only contain a forward pointer to the address of the next chunk in the bin, no backwards pointers. Here is a little diagram to demonstrate a tcache bin in which `C3` is the last chunk.
+
+```Allocate ->C0->C1->C2->C3->NULL```
+
+Libc stores these pointers in the **fd** field of these free chunks, which is also where user data would start if the chunk were allocated. Allocation is FIFO meaning that when we free a chunk we put it at the front of the bin and when we allocate a chunk we take a chunk from the front of the bin. Of course, when libc allocates a from the tcache bin it knows the location of the next chunk to allocate from by looking at the **fd** pointer of the chunk it allocated. For example, if the bin used to look like
+
+``` C0->C1->C2->C3->NULL```
+
+And we changed the **fd** pointer of `C0` to point to somewhere else like `C3` we would get
+
+```C0->C3->NULL```
+
+Which causes libc to allocate in the order `C0`, `C3`  making us  lose  `C1` and `C2`! Even worse, we can make **fd** of `C0` point to somewhere thats not even a chunk and the next time we malloc() from that bin, we would be able to write in that address! Therefore if we could mess with **fd** of the most recently freed tcache bin, we could cause malloc() to give us a pointer to arbitrary memory locations!
+
+We add chunks to the tcache bin by allocating and freeing chunks, which we can do by adding a horse and removing it, which will put its name in the bin. Remember that when a horse is removed, **horseName** is freed but not set to zero, so we can still get some function to access it. After the chunk is freed, the first 8 bytes of the location pointed to by **horseName** becomes **fd** of the free chunk. From reversing the binary, we know that cheating is a little broken and doesn't check if a buffer has been freed before writing to it, so we can use that to change what **fd** writes to! Lets write a little script to see this in action.
+
+```python
+#! /usr/bin/python
+import pwn
+import time
+
+pwn.context(binary="./vuln")
+pwn.context(terminal=["xfce4-terminal", "-e"])
+elf = pwn.ELF("./vuln")
+libcFile = pwn.ELF("./libc.so.6") #we will use this later
+p = elf.process()
+
+def addHorse(stableIndex, nameLength, name):
+	p.sendlineafter("Choice: ", b"1")
+	p.sendlineafter("Stable index # (0-17)? ", bytes(str(stableIndex), encoding="ascii"))
+	p.sendlineafter("Horse name length (16-256)? ", bytes(str(nameLength), encoding="ascii"))
+	p.sendlineafter(f"Enter a string of {nameLength} characters: ", name)
+
+def removeHorse(stableIndex):
+	p.sendlineafter("Choice: ", b"2")
+	p.sendlineafter("Stable index # (0-17)? ", bytes(str(stableIndex), encoding="ascii"))
+
+def cheat(stableIndex, name):
+	p.sendlineafter("Choice: ", b"0")
+	p.sendlineafter("Stable index # (0-17)? ", bytes(str(stableIndex),  encoding="ascii"))
+	p.sendlineafter("Enter a string of 16 characters: ", name)
+	p.sendlineafter("New spot? ", b"0")
+
+addHorse(0, 256, b"\xff") #\xff stops game from taking any input
+addHorse(1, 256, b"\xff")
+addHorse(2, 256, b"\xff")
+removeHorse(2)
+removeHorse(1)
+cheat(1, pwn.p64(0xdeadbeef00) + b"\xff")
+#libc gets mad if fd is not aligned to 0x10 bytes
+
+pwn.gdb.attach(p, "heap bins") 
+time.sleep(2)
+
+```
+
+This code adds 3 horses and removes two of them in backward order. This will cause 2 chunks to end up in tcache with horse 1 being at the front, then we overwrite the forward pointer of horse one so that libc sees the second chunk as `0xdeadbeef` Then we can run gdb and take a look at the bins! 
+
+![bins via overwrite](images/weirdBins.png)
+
+Looks like we got the first chunk to point to something else! But wait a minute... GDB reports that the address of this chunk is `0xdeadbee0d3` when we overwrote **fd** with `0xdeadbeef00`, what happened here??? It turns out that tcache bins and safe bins have a feature called safe linking to add an extra layer of security to the pointers! When we store a pointer in **fd** we actually store a mangled version of this pointer. What happens is we take the address that the pointer is stored at, shift it to the right by 12 bits, and xor it with the actual pointer and use that instead. Likewise we do the same thing to get the actual address.
+
+```
+newPointer = (&actualPointer >> 12) ^ actualPointer
+actualPointer = (&newPointer >> 12) ^ newPointer
+```
+
+The address of the pointer we overwrote was `0xfd36c0`, the weird pointer we got was `0xdeadbee0d3`
+
+```(0xfd36c0 >> 12) ^ 0xdeadbeef00 == 0xdeadbee0d3```
+
+Which is why libc thought we were referring to this weird address the entire time. Pretty cool! Right? Unfortunately this makes our lives a bit harder as we have to get the address of the pointer we are changing or we can't specify the right address to write to. Therefore, in order to gain arbitrary write we must also leak a heap address.
+
+#### Leaking Heap Addresses
+When we free and allocate chunks of the same size, we will likely get the former free chunks and all the juicy metadata they contain. If we don't write anything to these chunks when we allocate them, and later print out the contents of these chunks, we will get some **fd** pointers which point into heap. Of course, because of safe linking these pointers have been mangled and won't be very useful, but keep in mind that the last chunk in tcache bin has its **fd** pointer set to NULL, and when we mangle that we get the value used to xor the pointers with!
+
+```(heapAddress >> 12) ^ 0 = heapAddress >> 12```
+
+If this value is leaked, we can "sign" our fake pointers and make them accurately point to addresses we want to write to (Even though this is only the address of the chunk containing the NULL pointer, shifting it the right preserves only its most significant bits which the other chunk addresses should share). 
+
+To leak pointers we'll add some horses and remove some horses to put some chunks on tcache bin. Afterwards we add more horses to claim those chunks that were originally in tcache. If we enter "\xff" for our horse name we avoid having to write over the pointers these chunks have and they will be printed out as the horse names when the horses race! We'll look for the smallest value because that will be the one that is xored with the NULL pointer. Then we can make our malicious pointer.
+
+
+When allocating from the tcache bins, we allocate from the head, or the most recently freed chunk. After allocating from this chunk, libc will save the **fd** 
 
 In race there is function I name checkForEnd that lookas at one of the numbers set in initheap
 and sees if one is above 0x1d so I think its not actually stableIndex but position of horse
