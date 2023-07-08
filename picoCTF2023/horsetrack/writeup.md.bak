@@ -1,7 +1,7 @@
-I didn't end up solving this challenge by myself and used the following write-ups for help: <br>
-* Alex Sutila's write-up: https://github.com/AlexSutila/picoCTF-2023-writeups/blob/main/horsetrack/horsetrack.md
-* SloppyJoePirate's video write-up: https://www.youtube.com/watch?v=6c4QSlJJADA&ab_channel=SloppyJoePirates
-* unvariant's write-up: https://github.com/unvariant/ctf/tree/main/picoctf-2023/pwn/Horsetrack
+I didn't end up solving this challenge by myself and used the following writeups for help: <br>
+* Alex Sutila's writeup: https://github.com/AlexSutila/picoCTF-2023-writeups/blob/main/horsetrack/horsetrack.md
+* SloppyJoePirate's video writeup: https://www.youtube.com/watch?v=6c4QSlJJADA&ab_channel=SloppyJoePirates
+* unvariant's writeup: https://github.com/unvariant/ctf/tree/main/picoctf-2023/pwn/Horsetrack
 
 ## First impressions
 Apart from proving an executable for us to examine, we are also provided with a libc shared object and ld-linux shared object file. The executable will not run unless these files exist and have their permissions changed to be executable.
@@ -18,7 +18,7 @@ After you have 5 or more horses added, you can start racing. The horses all line
 <br>
 ![horses](images/race.png)
 <br>
-Long names get truncated to only 16 characters, it looks like it takes the first 16 characters of the horse name to display when racing, although when the winner is printed out we get the full name of the horse.
+Long names get trunctuated to only 16 characters, it looks like it takes the first 16 characters of the horse name to display when racing, although when the winner is printed out we get the full name of the horse.
 <br>
 ![add desc](images/trunctoBeg.png)
 <br>
@@ -92,7 +92,7 @@ First lets look at what happens before the game enters the while loop that gets 
 called without arguments and doesn't return anything, we'll have to look into that.
 
 **local_20** is checked against zero before the prompt screen appears and you are sent to goodbye
-if it is nonzero, it is set to zero so one of the 4 options must change its value which is probably whats responsible for kicking us out when we give the game incorrect inputs, I'll call it **exitCondition**
+if it is nonzero, it is init to zero so one of the 4 options must change its value which is probably whats responsible for kicking us out when we give the game incorrect inputs, I'll call it **exitCondition**
 
 **local_24** is probably user input seeing how it is read into, I'll rename it **userInput**.
 
@@ -166,7 +166,7 @@ Ghidra wasn't able to display the switch that involved basically all of the game
 <br>
 ![switch instructions](images/switchInstructions.png)
 <br>
-As you can see, Ghidra isn't able to disassemble any of the  bytes beyond where the different switch cases start. Looking at the instructions, a jump table is used to determine the addresses to jump to. This table is located at **0x402288** and consists of signed 4 byte integers.  The game adds these integers to the base address of the jump table, and because the jump table is so close to where the instructions to jump to are, it only needs to use 4 byte integers instead of 8 byte long integers. 
+As you can see, Ghidra isn't able to dissasemble any of the  bytes beyond where the different switch cases start. Looking at the instructions, a jump table is used to determine the addresses to jump to. This table is located at **0x402288** and consists of signed 4 byte integers.  The game adds these integers to the base address of the jump table, and because the jump table is so close to where the instructions to jump to are, it only needs to use 4 byte integers instead of 8 byte long integers. 
 
 The jump table values are:
 
@@ -335,7 +335,7 @@ undefined8 addHorse(horseStruct *horse)
 }
 ```
 
-First the game receives the stable index, which it indexes into horseData with. There is no overflow here because it checks if the stable index is within the bounds of the array. When the game gets the stable index, it checks if one of its fields **horseShort2** is set to zero, if its not, it tells us the stable location is already in use and returns a nonzero value, this will cause **exitCondition** to be set to something other then zero and kick us out of the game. If **horseShort2** isn't set, it checks for a name length to see if its within bounds (16-256) and allocates a buffer in heap to store the horse's name. It sets the horse's **horseLong** field to the buffer's address meaning that **horseLong** is a pointer to its name. The function **FUN_00401226** is tasked with populating this buffer with a name, it is passed the length of the name and the buffer address. Afterwards it sets **horseShort2** to 1 and returns. This means **horseShort2** marks whether a horse is in use.
+First the game recieves the stable index, which it indexes into horseData with. There is no overflow here because it checks if the stable index is within the bounds of the array. When the game gets the stable index, it checks if one of its fields **horseShort2** is set to zero, if its not, it tells us the stable location is already in use and returns a nonzero value, this will cause **exitCondition** to be set to something other then zero and kick us out of the game. If **horseShort2** isn't set, it checks for a name length to see if its within bounds (16-256) and allocates a buffer in heap to store the horse's name. It sets the horse's **horseLong** field to the buffer's address meaning that **horseLong** is a pointer to its name. The function **FUN_00401226** is tasked with populating this buffer with a name, it is passed the length of the name and the buffer address. Afterwards it sets **horseShort2** to 1 and returns. This means **horseShort2** marks whether a horse is in use.
 Now we can update horseStruct
 <br>
 ![updated horse struct](images/horseInformation2.png)
@@ -417,7 +417,7 @@ undefined8 removeHorse(horseStruct *horseData)
 }
 ```
 
-Remove horse asks the player for a valid number to index into the **horseData** array with. It checks if the horse there is currently being used (has a name allocated) via the **horseUsed**. If the horse has been used, it free()s the the buffer containing the horse's name and sets the horse's **horseUsed** field to 0 indicating that the player can add a horse in that stable now. There is a vulnerability here as the freed pointer does not get set to NULL, so any functions that use the horse's name will be accessing freed memory. 
+Remove horse asks the player for a valid number to index into the **horseData** array with. It checks if the horse there is currently being used (has a name allocated) via the **horseUsed**. If the horse has been used, it free()s the the buffer containing th horse's name and sets the horse's **horseUsed** field to 0 indicating that the player can add a horse in that stable now. There is a vulnerability here as the freed pointer does not get set to NULL, so any functions that use the horse's name will be accessing freed memory. 
 
 #### Cheating - Option 0
 ```c
@@ -771,7 +771,7 @@ def getPointers():
 	return min(leakedPointers)
 ```
 
-This just parses the ASCII art that gets printed when racing and grabs all the data from the starting frame. The game prints "\n\n" for my terminal when its done printing the 18 horses and is going to print another frame, but on the challenge instance it prints "\r\n\r\n\r\n" so I think it depends on the terminal.
+This just parses the ascii art that gets printed when racing and grabs all the data from the starting frame. The game prints "\n\n" for my terminal when its done printing the 18 horses and is going to print another frame, but on the challenge instance it prints "\r\n\r\n\r\n" so I think it depends on the terminal.
 
 This is the code to setup the horses so they leak addresses
 
@@ -815,7 +815,7 @@ Now libc recognizes what we are pointing to!
 Now that we can allocate chunks anywhere we want, we can get a shell!
 
 
-###  NO LONGER REQUIRED: Leaking libc base
+###  NO LONGER RECQUIRED: Leaking libc base
 
 *NOTE: This section is no longer important for getting a shell so you may skip it. The only reason I included it was because its really long and I didn't want to delete it*
 
@@ -992,7 +992,7 @@ p.interactive()
 
 #### Challenge instance
 
-Now that we can get a shell locally, we need to do it on the actual challenge instance so we can get our flag! This means we can't randomly attach gdb to debug our exploit anymore. Doing this on the challenge instance is mostly the same as locally, but you use a remote connection instead of a binary. I also ssh into a different server when connecting to pico challenge instances and it received "\r\n" in place of "\n" when the horses were racing, so that needed to be accounted for too in the parsing code.
+Now that we can get a shell locally, we need to do it on the actual challenge instance so we can get our flag! This means we can't randomly attach gdb to debug our exploit anymore. Doing this on the challenge instance is mostly the same as locally, but you use a remote connection instead of a binary. I also ssh into a different server when connecting to pico challenge instances and it recieved "\r\n" in place of "\n" when the horses were racing, so that needed to be accounted for too in the parsing code.
 
 ```python
 #! /usr/bin/python3
