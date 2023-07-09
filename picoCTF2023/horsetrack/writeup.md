@@ -1095,6 +1095,10 @@ When running port number is passed in as argument.
 
 `picoCTF{t_cache_4ll_th3_w4y_2_th4_b4nk_6112bbec}`
 
+## Useful links
+
+https://azeria-labs.com/heap-exploitation-part-2-glibc-heap-free-bins/
+
 
 
 
