@@ -6,7 +6,7 @@
 
 Category: [web](../)
 
-Tags: `#picoCTF 2023` `Web Exploitation` `XXE`
+Tags: `#picoCTF 2023` `Web Exploitation`
 
 ## Description ##
 
