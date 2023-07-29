@@ -1,4 +1,21 @@
-## Findme
+# Findme #
+
+## Overview ##
+
+100 points
+
+Category: [web](../)
+
+Tags: `#picoCTF 2023` `Web Exploitation`
+
+## Description ##
+
+Help us test the form by submiting the username as `test` and password as `test`!
+
+Additional details will be available after launching your challenge instance.
+
+## Solution ##
+
 
 The challenge contains a form which you can enter login credentials to.
 <br>
