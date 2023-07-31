@@ -10,11 +10,11 @@ Tags: `picoCTF 2023` `Cryptography`
 
 ## Description ##
 
-This encryption algorithm leaks a "bit" of data every time it does a computation. Use this to figure out the encryption key. Download the encryption program here [encrypt.py](https://artifacts.picoctf.net/c/427/encrypt.py). Access the running server with nc saturn.picoctf.net PORT. The flag will be of the format picoCTF{<encryption key>} where <encryption key> is 32 lowercase hex characters comprising the 16-byte encryption key being used by the program.
+This encryption algorithm leaks a "bit" of data every time it does a computation. Use this to figure out the encryption key. Download the encryption program here [encrypt.py](https://artifacts.picoctf.net/c/427/encrypt.py). Access the running server with nc saturn.picoctf.net PORT. The flag will be of the format picoCTF{\<encryption key\>} where \<encryption key\> is 32 lowercase hex characters comprising the 16-byte encryption key being used by the program.
 
 ## Solution ##
 
-We will use a simple form of correlation power analysis for this attack, for more details on correlation power analysis check out the write ups on correlation power analysis, check out the write ups for the other challenges in this series.
+We will use a simple form of correlation power analysis for this attack, for more details on correlation power analysis, check out the write ups for the [other](../rest) challenges in this series.
 
 When we access the running server, we are prompted to enter 16 bytes of data in hex. The result is a some leakage.
 
