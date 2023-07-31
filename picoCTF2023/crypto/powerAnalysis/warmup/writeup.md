@@ -47,6 +47,6 @@ def encrypt_and_leak(plaintext):
 
 We will find this key sub-key by sub-key, meaning we will find one byte of the key at a time. We do this by calculating the leakage that sub key will contribute (it will either be zero or one bits) for each plain text and comparing it against the leakage results. If the leakage calculated from the guessed sub-key rises when the actual leakage rises and falls when the actual leakage falls, it is more likely to be the actual sub-key. We can do this for all 16 sub-keys (AES-128 uses 16 byte keys). We can look for similar behavior between the guessed key's leakages and actual leakages by finding the correlation coefficient between the guessed leakages and actual leakages. The sub-key with the highest correlation should be the correct one.
 
-The code that does this is in [correlate.py](./solve.py)
+The code that does this is in [correlate.py](./correlate.py)
 
 ```picoCTF{81808c36fca7288b8a57f90907ccbae6}```
