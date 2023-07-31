@@ -16,7 +16,7 @@ Additional details will be available after launching your challenge instance.
 
 ## Solution ##
 
-See [the notebook](./PowerAnalysis1.ipynb) for details, run the script `collect.py` to collect traces, solve script is `solve1.py`
+See [the notebook](./PowerAnalysis1.ipynb) for details, run the script [collect.py](./collect.py) to collect traces, solve script is [solve1.py](./solve1.py)
 
 #  PowerAnalysis: Part 2 #
 
@@ -34,4 +34,4 @@ This embedded system allows you to measure the power consumption of the CPU whil
 
 ## Solution ##
 
-See `solve2.py`
+See [solve2.py](./solve2.py), its just like the first one except the code has been modified to parse the traces in the zip file
