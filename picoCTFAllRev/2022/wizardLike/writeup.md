@@ -27,7 +27,7 @@ To figure out whats happening in the game, I analyzed it using Ghidra. The resul
 
 Initially I wanted to work in a top down fashion and reverse the functions that were called at the beginning of the code rather than the main game loop. I found a few useful functions during this time but most of the time I just wasted chasing down library functions. 
 
-One function copies a bunch of characters that make up the entire map into a buffer while the other one initializes a same sized buffer to zeroes, this buffer is probably the one that is displayed to the players. These functions get called once at the start and everytime a player changes levels. 
+One function copies a bunch of characters that make up the entire map into a buffer while the other one initializes a same sized buffer to zeroes, this buffer is probably the one that is displayed to the players. These functions get called once at the start and every time a player changes levels. 
 
 ```
 
@@ -152,11 +152,11 @@ What I did was patch two instructions using radare2 so that it would compare aga
 
 Now the only character that will stop the character is `'U'`, which isn't on the map. Now we can move around freely.
 
-Moving around on the map unhindered lets us see that the map actually contains ascii art in the areas that we can't normally access.
+Moving around on the map unhindered lets us see that the map actually contains ASCII art in the areas that we can't normally access.
 
 ![map](images/map.png)
 
-The first level spells out `picoCTF{`, the second spells out `ur_4_w1z4rd_`, and the other 8 levels each contribute 1 random character along with the final `}` at the end of the flag. Unfortunately, while we do have the ability to walk anywhere, its still quite tedious as we have to walk around in order to reveal the entire map. This is also incredibily annoying at the final level as most of it is covered in `#`'s, which hide the final characters. 
+The first level spells out `picoCTF{`, the second spells out `ur_4_w1z4rd_`, and the other 8 levels each contribute 1 random character along with the final `}` at the end of the flag. Unfortunately, while we do have the ability to walk anywhere, its still quite tedious as we have to walk around in order to reveal the entire map. This is also incredibly annoying at the final level as most of it is covered in `#`'s, which hide the final characters. 
 
 There is a chunk of code right before the player input handling that controls what is output to the player. 
 
@@ -184,7 +184,7 @@ There is a chunk of code right before the player input handling that controls wh
     }
 ```
 
-In this code, an area on the buffer `DAT_00537d80_BlankMap` is only written to with the characters from the level if `cVar1` is non zero or that area has already been revealed and written to. Because the buffer is initially set to all zeroes everytime we enter a new level, the amount of data that is written to it depends on the value of `cVar1` and thus the output of the function i've named `CreateFog`.  
+In this code, an area on the buffer `DAT_00537d80_BlankMap` is only written to with the characters from the level if `cVar1` is non zero or that area has already been revealed and written to. Because the buffer is initially set to all zeroes every time we enter a new level, the amount of data that is written to it depends on the value of `cVar1` and thus the output of the function I've named `CreateFog`.  
 
 Instead of reversing the function and figuring out what it does, I just patched it in radare2 so that it would always return 1 instead of zero, which should make it so that every tile of the level is written to the `BlankMap` buffer which is what is printed out. I do this by finding all points where the `EAX` register is set to zero and setting it to 1 instead.
 
@@ -200,7 +200,7 @@ Instead of reversing the function and figuring out what it does, I just patched 
     0x004020da      b801000000     mov eax, 1
 ```
 
-With these patches, every level is visible immediately and you can just read the ascii art immediately. For example, here is level 10. Obviously it would take forever for someone to walk around and try to find the final two characters with all the walls blocking the way.
+With these patches, every level is visible immediately and you can just read the ASCII art immediately. For example, here is level 10. Obviously it would take forever for someone to walk around and try to find the final two characters with all the walls blocking the way.
 
 ![level 10](images/10.png)
 
