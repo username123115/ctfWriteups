@@ -25,7 +25,7 @@ To figure out whats happening in the game, I analyzed it using Ghidra. The resul
 
 ![Many functions](./images/functions.png)
 
-Initially I wanted to work in a top down fashion and reverse the functions that were called at the beginning of the code rather than the main game loop. I found a few useful functions during this time but most of the time I just wasted chasing down library functions. 
+Initially I wanted to work in a top down fashion and reverse the functions that were called at the beginning of the code rather than the main game loop. I found two functions that helped me in solving this challenge, but I also ended up wasting a lot of time looking at what I think were library functions. 
 
 One function copies a bunch of characters that make up the entire map into a buffer while the other one initializes a same sized buffer to zeroes, this buffer is probably the one that is displayed to the players. These functions get called once at the start and every time a player changes levels. 
 
@@ -64,11 +64,11 @@ void FUN_00401e05_InitBlankMap(void)
 }
 ```
 
-After a while I also tried using IDA FLIRT signatures to detect library functions but the ones I tried didn't end up finding anything so I gave up looking at some of the other functions that were called when initializing the game.
+After a while I also tried using IDA FLIRT signatures to detect library functions but the ones I tried didn't end up finding anything so I changed my approach and started looking at what was happening inside of the main game loop.
 
 ## Solution ##
 
-Afterwards I come across a block of code that seems to be taking the player's input and deciding what do do based on it.
+Afterwards I came across a block of code that seems to be taking the player's input and deciding what do do based on it.
 
 ```
     iVar4 = FUN_00403a00_Fgets(DAT_00536b50_Stdin);
@@ -110,9 +110,9 @@ void FUN_00402247_InputW(void)
 }
 ```
 
-If the collision function returns `'\0'` that means the player would hit a wall or empty space if they move in their requested direction and nothing will happen. Otherwise, if any other value is returned, the game will move them in their requested direction.
+If the collision function returns `'\0'` that means the player would hit a wall or empty space if they move in the requested direction and so the game doesn't move the player. Otherwise, if any other value is returned, the game will move them in their requested direction.
 
-The collision function simply checks whether or not the tile is a `'#'` or space a space.
+The collision function simply checks whether or not the tile is a `'#'` or a space.
 
 ```
 undefined8 FUN_00402188_CheckCollision(int x,int y)
@@ -136,7 +136,7 @@ undefined8 FUN_00402188_CheckCollision(int x,int y)
 }
 ```
 
-What I did was patch two instructions using radare2 so that it would compare against something else so that the player wouldn't be stopped by the walls or blank spaces.
+What I did was patch the two compare instructions using radare2 so that it would compare against something else so that the player wouldn't be stopped by the walls or blank spaces.
 
 ```
     004021f4 3c 23           CMP        AL,0x23
@@ -158,7 +158,7 @@ Moving around on the map unhindered lets us see that the map actually contains A
 
 The first level spells out `picoCTF{`, the second spells out `ur_4_w1z4rd_`, and the other 8 levels each contribute 1 random character along with the final `}` at the end of the flag. Unfortunately, while we do have the ability to walk anywhere, its still quite tedious as we have to walk around in order to reveal the entire map. This is also incredibly annoying at the final level as most of it is covered in `#`'s, which hide the final characters. 
 
-There is a chunk of code right before the player input handling that controls what is output to the player. 
+There is a chunk of code right before the player input handling that controls what part of the map is output to the player. 
 
 ```
     for (local_28 = 0; local_28 < iVar2; local_28 = local_28 + 1) {
@@ -169,7 +169,7 @@ There is a chunk of code right before the player input handling that controls wh
                             (DAT_00533f70_PlayerX,DAT_00533f74_PlayerY,DAT_00536790 + local_24,
                              DAT_00536794 + local_28);
           if ((cVar1 != '\0') || ((&DAT_00537d80_BlankMap) [(long)(DAT_00536794 + local_28) * 100 + (long)(local_24 + DAT_00536790)] != '\0')) {
-            (&DAT_00537d80_BlankMap)
+            (&DAT_00537d80_BlankMap) //This part is useful
             [(long)(DAT_00536794 + local_28) * 100 + (long)(local_24 + DAT_00536790)] = 1;
             local_12 = (ushort)(byte)(&DAT_0053a4a0_Map)
                                      [(long)(DAT_00536794 + local_28) * 100 +
@@ -186,7 +186,7 @@ There is a chunk of code right before the player input handling that controls wh
 
 In this code, an area on the buffer `DAT_00537d80_BlankMap` is only written to with the characters from the level if `cVar1` is non zero or that area has already been revealed and written to. Because the buffer is initially set to all zeroes every time we enter a new level, the amount of data that is written to it depends on the value of `cVar1` and thus the output of the function I've named `CreateFog`.  
 
-Instead of reversing the function and figuring out what it does, I just patched it in radare2 so that it would always return 1 instead of zero, which should make it so that every tile of the level is written to the `BlankMap` buffer which is what is printed out. I do this by finding all points where the `EAX` register is set to zero and setting it to 1 instead.
+Instead of reversing the function and figuring out what it does, I just patched it in radare2 so that it would always return 1 instead of zero, which should make it so that every tile of the level is written to the `BlankMap` buffer is then printed out. I do this by finding all points in the function where the `EAX` register is set to zero before a return and setting it to 1 instead.
 
 ```
     0x0040201a      b800000000     mov eax, 0
@@ -200,7 +200,7 @@ Instead of reversing the function and figuring out what it does, I just patched 
     0x004020da      b801000000     mov eax, 1
 ```
 
-With these patches, every level is visible immediately and you can just read the ASCII art immediately. For example, here is level 10. Obviously it would take forever for someone to walk around and try to find the final two characters with all the walls blocking the way.
+With these patches, every level is completely visible upon entering and all areas are accessible. For example, here is level 10. Obviously it would take forever for someone to walk around and try to find the final two characters with all the walls blocking the way.
 
 ![level 10](images/10.png)
 
