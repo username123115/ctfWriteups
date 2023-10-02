@@ -32,7 +32,7 @@ Now, I will make a tree of a possible factors of `k`, `(p - 1) / 2`, and `(q - 1
 
 ```
 k >= e
-log2(p or q) > 128 which means log2((p - 1) / 2 or (q - 1) / 2) > 127
+size of p and q exceed 128 bits
 ```
 
 When the last node of the tree is reached, we check if `p` and `q` have similar magnitudes and if they are prime. If they are, we add them to the potential candidates. 
