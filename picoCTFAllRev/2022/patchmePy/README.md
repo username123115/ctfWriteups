@@ -12,6 +12,7 @@ Tags: `picoCTF 2022` `Reverse Engineering` `obfuscation`
 ## Description ##
 
 Can you get the flag?
+Reverse engineer [this](https://artifacts.picoctf.net/c/45/bbbbloat) binary.
 Run this [Python program](https://artifacts.picoctf.net/c/105/flag.txt.enc) in the same directory as this [encrypted flag](https://artifacts.picoctf.net/c/105/flag.txt.enc).
 
 ## Solution ##
