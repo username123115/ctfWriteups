@@ -27,7 +27,7 @@ $Id: UPX 3.95 Copyright (C) 1996-2018 the UPX Team. All Rights Reserved. $
 
 Because the main program has been compressed, we can't analyze what it's doing until we extract its contents. Fortunately we can use the `upx` utility to extract the main program by using the `-d` flag. `upx -d unpackme-upx -o chal` will leave us with the extracted program with the name of `chal`. In the disassembly of this program we see that it'll print the flag if we input "754635".
 
-```
+```c
 ...
   if (input == 0xb83cb) {
     local_40 = (char *)rotate_encrypt(0,&local_38);

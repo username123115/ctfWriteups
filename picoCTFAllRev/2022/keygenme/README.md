@@ -18,7 +18,7 @@ Reverse engineer [this](https://artifacts.picoctf.net/c/53/keygenme) binary.
 
 After loading it into Ghidra, it seems the program simply checks the result of a function call with your key as the input
 
-```
+```c
 undefined8 main(void)
 
 {
@@ -48,7 +48,7 @@ undefined8 main(void)
 The `keyCheck` function looks really busy, messing around with a lot of variables and using MD5, however in the end all its doing is checking your key against a desired key byte by byte. 
 
 
-```
+```c
 ...
 
   sVar1 = strlen(key);

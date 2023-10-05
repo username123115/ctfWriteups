@@ -29,8 +29,7 @@ Initially I wanted to work in a top down fashion and reverse the functions that 
 
 One function copies a bunch of characters that make up the entire map into a buffer while the other one initializes a same sized buffer to zeroes, this buffer is probably the one that is displayed to the players. These functions get called once at the start and every time a player changes levels. 
 
-```
-
+```c
 void FUN_00401e6d_Copy2Map(long param_1)
 
 {
@@ -45,10 +44,9 @@ void FUN_00401e6d_Copy2Map(long param_1)
   }
   return;
 }
-
 ```
 
-```
+```c
 void FUN_00401e05_InitBlankMap(void)
 
 {
@@ -70,7 +68,7 @@ After a while I also tried using IDA FLIRT signatures to detect library function
 
 Afterwards I came across a block of code that seems to be taking the player's input and deciding what do do based on it.
 
-```
+```c
     iVar4 = FUN_00403a00_Fgets(DAT_00536b50_Stdin);
     if (iVar4 == 0x51) {
       playing = false;
@@ -92,7 +90,7 @@ Afterwards I came across a block of code that seems to be taking the player's in
 
 All of these functions perform a collision check to see whether or not to update the player's position. As an example this is what gets called when you press `w`
 
-```
+```c
 void FUN_00402247_InputW(void)
 
 {
@@ -114,7 +112,7 @@ If the collision function returns `'\0'` that means the player would hit a wall 
 
 The collision function simply checks whether or not the tile is a `'#'` or a space.
 
-```
+```c
 undefined8 FUN_00402188_CheckCollision(int x,int y)
 
 {
@@ -160,7 +158,7 @@ The first level spells out `picoCTF{`, the second spells out `ur_4_w1z4rd_`, and
 
 There is a chunk of code right before the player input handling that controls what part of the map is output to the player. 
 
-```
+```c
     for (local_28 = 0; local_28 < iVar2; local_28 = local_28 + 1) {
       for (local_24 = 0; local_24 < iVar3; local_24 = local_24 + 1) {
         if ((((local_24 + DAT_00536790 < 100) && (local_28 + DAT_00536794 < 100)) &&

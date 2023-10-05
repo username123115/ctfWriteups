@@ -18,7 +18,7 @@ Reverse engineer [this](https://artifacts.picoctf.net/c/45/bbbbloat) binary.
 
 We are given a binary that asks us for a number. Opening in Ghidra it seems to be comparing our input to the number 0x86187 or 549255.
 
-```
+```c
 ...
   __isoc99_scanf(&DAT_00102020,&input);
   local_44 = 0xd2c49;
