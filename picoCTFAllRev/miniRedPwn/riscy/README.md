@@ -38,7 +38,7 @@ or
 
 depending on whether or not the input was longer then 7 characters or not.
 
-Opening the binary in Ghidra gives us a better view of whats happening, although when annoying problem is that Ghidra is unable to tell what the `ecall` instructions are doing, so we are going to have to use a syscall table to figure those out.
+Opening the binary in Ghidra gives us a better view of whats happening, although one annoying problem is that Ghidra is unable to tell what the `ecall` instructions are doing, so we are going to have to use a syscall table to figure those out.
 
 
 ```c
