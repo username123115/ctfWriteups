@@ -407,20 +407,22 @@ From here there is a routine that multiplies `y` by 0x10 and adds it to `x`,
 suggesting that the map has a width of 16. Afterwards this value is multiplied
 by 4 and used to index into somewhere
 
-(INDEX = 0x10 * `y` + `x`)
+```
+(INDEX = 0x10 * y + x)
 
-`0xef-0xf7: Jump to maze which jumps back to input loop`<br>
-STOREW 0x7b <= `This is the address of the input loop`<br>
+0xef-0xf7: Jump to maze which jumps back to input loop<br>
+STOREW 0x7b <= This is the address of the input loop<br>
 
-`a` = [`x`, `y`, `z`, 4 * INDEX, 0x7b]<br>
+a = [x, y, z, 4 * INDEX, 0x7b]
 ASWAP
-`a` = [`x`, `y`, `z`, 0x7b, 4 * INDEX]<br>
+a = [x, y, z, 0x7b, 4 * INDEX]
 STOREW 0x174
-`a` = [`x`, `y`, `z`, 0x7b, 4 * INDEX, 0x174]<br>
+a = [x, y, z, 0x7b, 4 * INDEX, 0x174]
 ASUM
-`a` = [`x`, `y`, `z`, 0x7b, 4 * INDEX + 0x174]<br>
+a = [x, y, z, 0x7b, 4 * INDEX + 0x174]
 JUMPA  => 4 * INDEX + 0x174
-`a` = [`x`, `y`, `z`, 0x7b]<br>
+a = [x, y, z, 0x7b]
+```
 
 Based off the final jump it seems every tile of the map consists of 4
 instructions and the map is located at offset `0x174` from the start of
@@ -496,9 +498,13 @@ a [program](./dump.py) that prints out the map by looking at the [hexdump](./dum
 The tiles are as follows
 
 `#`: Bad
+
 ` `: Normal
+
 `-`: Decrement `z`
+
 `+`: Increment `z`
+
 `~`: Win
 
 Because there are `-` tiles blocking our way, we need to ensure our value of `z`
