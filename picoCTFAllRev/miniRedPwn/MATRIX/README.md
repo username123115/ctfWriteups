@@ -377,7 +377,7 @@ the initialization at main we know that the counter starts at zero. At this
 point it seems our only option is to create an emulator/interpreter to be able
 to debug and reverse engineer this program.
 
-My program [interpreter.py](./interpreter.py) contains some information on that
+My program [interpreter.py](./interpreter.py) contains some information that
 documents what all the instructions are doing. Afterwards came the debugger
 [debugger.py](./debugger.py) which has the ability to set one break-point at
 a time, print the values of registers and stack, and step and print 
@@ -409,18 +409,18 @@ by 4 and used to index into somewhere
 
 (INDEX = 0x10 * `y` + `x`)
 
-`0xef-0xf7: Jump to maze which jumps back to input loop`
-STOREW 0x7b <= `This is the address of the input loop`
+`0xef-0xf7: Jump to maze which jumps back to input loop`<br>
+STOREW 0x7b <= `This is the address of the input loop`<br>
 
-`a` = [`x`, `y`, `z`, 4 * INDEX, 0x7b]
+`a` = [`x`, `y`, `z`, 4 * INDEX, 0x7b]<br>
 ASWAP
-`a` = [`x`, `y`, `z`, 0x7b, 4 * INDEX]
+`a` = [`x`, `y`, `z`, 0x7b, 4 * INDEX]<br>
 STOREW 0x174
-`a` = [`x`, `y`, `z`, 0x7b, 4 * INDEX, 0x174]
+`a` = [`x`, `y`, `z`, 0x7b, 4 * INDEX, 0x174]<br>
 ASUM
-`a` = [`x`, `y`, `z`, 0x7b, 4 * INDEX + 0x174]
+`a` = [`x`, `y`, `z`, 0x7b, 4 * INDEX + 0x174]<br>
 JUMPA  => 4 * INDEX + 0x174
-`a` = [`x`, `y`, `z`, 0x7b]
+`a` = [`x`, `y`, `z`, 0x7b]<br>
 
 Based off the final jump it seems every tile of the map consists of 4
 instructions and the map is located at offset `0x174` from the start of
@@ -433,7 +433,7 @@ also figured out where the map is located, we just need to figure out how to win
 
 Looking at the map in a hex editor:
 
-~[hexDump](./images/hexDump.png)
+![hexDump](./images/hexDump.png)
 
 (There is also a hex dump of the entire map in [this](./maze) file)
 
