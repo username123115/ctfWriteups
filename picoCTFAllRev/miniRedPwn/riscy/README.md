@@ -3,7 +3,7 @@
 
 ## Overview ##
 
-300 points
+350 points
 
 Category: [picoMini by redpwn](../)
 
