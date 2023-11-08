@@ -18,7 +18,7 @@ What is the password? File: [checkpass](https://mercury.picoctf.net/static/beef7
 Haha imagine doing the intended side channel attack when you can just do rev :p
 
 When launching the program we are told we need to pass in the flag via a command line argument, when we pass one in we're either told
-the length of the flag is invalid or we gave the wrong one.
+the length of the flag is invalid or that we gave the wrong one.
 
 ```
 [danielj@daniel checkpass]$ ./checkpass
@@ -250,7 +250,8 @@ and runs it 4 times through a function `scramble`. Each time with the
 input as the output of the previous iteration of `scramble` and a
 number that goes from 0 to 3.
 
-Finally, the output of the final scramble, which is stored in `scrambledArray`
+The output of the final iteration of `scramble` is stored in
+`scrambledArray`
 
 Note that `scrambledArray` is a byte array with length 53 while the output
 only contains 32 bytes. The output is stored starting at an offset 0x15 or
@@ -264,7 +265,7 @@ that counts instructions, but I wasn't able to realize this.
 
 ### Scramble ###
 
-If we can figure out how to reverse scramble we would be able to get our
+If we can figure out how to reverse `scramble` we would be able to get our
 original password back. `scramble` looks like this when decompiled:
 
 ```c
@@ -462,15 +463,15 @@ corresponding location in a temporary array. There are four
 different substitution tables, the table used is the one located at
 `change[offset]`. 
 
-The bytes in the temporary array then scrambled and put into the output
+The bytes in the temporary array are than scrambled and put into the output
 array. This is done by taking the offset of each byte in the temporary
 array and using that to index into a table containing new offsets. This
 new offset will be where the byte is located in the output.
 
 The table that contains the offset is located at `swapTable[offset]`
 
-Knowing this, we can take the hexdump of `change` and `offset` and use it
-to create a [solver](./solve.py)
+Knowing this, we can take the hexdump of the substitution tables and swap
+tables and use them to create a [solver](./solve.py)
 
 The value of the flag is `picoCTF{t1mingS1deChann3l_NWeA525eOE4P6q}`
 
