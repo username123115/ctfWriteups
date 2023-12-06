@@ -36,14 +36,14 @@ in the sensing variable named `answer`.
 
 We can also see the following variables in the variables section:
 
-`alpha`: `zvtwrca57n49u2by1jdqo6g0ksxfi8pelmh3`
-`enc`: `902 764 141 454 207 51 532 1013 496 181 562 342`
-`input`: changes
-`name`: changes
+`alpha`: `zvtwrca57n49u2by1jdqo6g0ksxfi8pelmh3` <br>
+`enc`: `902 764 141 454 207 51 532 1013 496 181 562 342` <br>
+`input`: changes <br>
+`name`: changes <br>
 
 
 The code gets rid of what was originally in `name` and initializes it by iterating through every character of `answer`, finding the index of that
-character in `alpha`, and appending it to the now empty `name`. However, `answer` = 'isaac newton' contains a space, which is not located in
+character in `alpha` (starting from 1), and appending it to the now empty `name`. However, `answer` = 'isaac newton' contains a space, which is not located in
 `alpha`. In this case, the [scratch wiki entry for the item # of block](https://en.scratch-wiki.info/wiki/Item_Number_of_()_in_()_(block))_ states that 
 "If the item is not in a list, it reports 0", meaning that the space will result in a zero getting appended to `name`
 
