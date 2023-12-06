@@ -3,7 +3,7 @@
 
 ## Overview ##
 
-476 points
+464 points
 
 Category: [rev](../)
 
