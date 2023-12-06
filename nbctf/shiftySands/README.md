@@ -77,7 +77,7 @@ LAB_00401bb8:
 
 ```
 The program has a global `map` variable that contains the initial map as a string. Looking at the arguments to the `move()` function
-it can be assumed that the map is 10 tiles wide. If we print it out taking into consideration this width the map will look like this:
+it can be assumed that the map is 10 tiles wide. If we print it out, the map will look like this:
 
 ```
 @###.....#
@@ -92,10 +92,10 @@ it can be assumed that the map is 10 tiles wide. If we print it out taking into 
 ..S..#LS..
 ```
 
-Where the player's position is indicated by the `@` symbol (it is on top of a `.`)
+Where the player's position is indicated by the `@` symbol (it is on top of a `.` tile)
 
-The program's main loop takes a non newline character from the input stream and processes it, incrementing global variable `moves`.
-It repeats this until either `moves` exceeds 0x31 (49), the player moves into a `S`, or the player moves into the `L`. If
+The program's main loop takes a non newline character from the input stream and processes it before incrementing the global variable `moves`.
+It repeats this until either `moves` exceeds 0x31 (49), the player moves into a `S` tile, or the player moves into the `L` tile. If
 the player moves into the `L` tile the `win()` functioned is called, which prints the flag. Otherwise the loop is ended and the game
 prints out "ssssssssss"
 
@@ -173,10 +173,13 @@ void shift(void)
 
 `shift()` modifies the `map` variable in four different ways. The way that `map` gets changed is dependent on the value of `moves` modulo four, which is
 denoted as the `phase` variable. Every modification goes through the map and moves all `S` tiles one tile towards some other direction. This will
-only happen for a given `S` tile if the new position for that `S` tile is a `.` tile. Because the map will get changed as the map gets iterated through,
+only happen for a given `S` tile if the new position for that `S` tile is a `.` tile. 
+
+Because the map will get changed as it gets iterated through,
 a given `S` tile could have had a neighboring `S` tile during one point in the iteration, but not any more when it becomes time for it to be moved. For
 this reason every one of the four transformations will iterate through the map in a different way to give the `S` tiles the highest chance of being moved.
-(For example, the transformation that moves `S` tiles down will iterate `y` = 10 to `y` = 0 so that tiles at the bottom move down first, giving the `S` tiles above them a chance to move down if they were previously blocked by an `S` tile)
+
+For example, the transformation that moves `S` tiles down will iterate from `y` = 10 to `y` = 0 so that the tiles at the bottom move down first, giving the `S` tiles above them a chance to move down if they were previously blocked by an `S` tile
 
 The ordering of the phases are as follows:
 
@@ -187,7 +190,7 @@ The ordering of the phases are as follows:
 3: right
 ```
 
-This function presents a unique challenge to this maze, as we have to be wary of how the deadly `S` tiles move as we navigate through the maze.
+This function adds a unique challenge to this maze, as we have to be aware of how the deadly `S` tiles move as we navigate through the maze.
 
 ## move() ##
 
@@ -242,10 +245,11 @@ void move(char input,int *y,int *x)
 }
 ```
 
-It uses the `map` global variable as the map and tests against the inputs `wasd`. If the player doesn't input one of
+It uses the global variable `map` for the map and tests against the inputs `wasd`. If the player doesn't input one of
 these letters it does nothing and a move ends up being wasted. Otherwise it determines if the position the player wants to
 move to is valid by checking if the new position contains the `#` or `S` tiles. If the position doesn't contain these tiles,
 the player is moved there by updating the `x` and `y` values. Otherwise nothing happens and a move is wasted. 
+
 One thing to note is that `move()` doesn't care if a player is inside of a `S` tile or not, and that the game calls `move()` before
 it checks if a player is in a `S` tile so the player can still save themselves if a `S` tile shifts into their position (The player isn't
 represented as a tile on the map so sand can still shift onto the player if they're standing on a `.` tile.
