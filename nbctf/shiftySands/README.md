@@ -274,9 +274,11 @@ nbctf{5lowly_5huffl3d_5wa110wing_54nd5}
 
 ## Reflection ##
 
-I spent a lot of time on this challenge with the majority dedicated to writing and debugging my implementation of my game,
-but I feel like I could've completely skipped the implementation if I used the GDB python API to print out the contents of
-`map` with some added things like direction and player indicators as the game ran as I would only need to access the `map`
+I spent a lot of time on this challenge with the majority of it dedicated to writing and debugging my implementation of my game.
+However, I feel like I could've completely skipped the implementation if I used the GDB python API to print out the contents of
+`map` along with some added things like direction and player indicators as the game ran.
+
+I would only need to access the `map`
 and `moves` variables without having to worry about the rewriting the internal logic itself.
 Although this idea completely skipped my mind when I was solving I think it'll be an excellent opportunity for me to learn to script GDB and
 I'll likely update this write up with that solution once I get around to doing it.
