@@ -20,7 +20,7 @@ It's not a bad idea to learn to read Powershell. We give you the output, but do 
 
 The script isn't too hard to read, but I don't have a way to run it on my system, so the first thing I did was setup an environment to run.
 
-I did this by pulling a powershell image and running it in docker
+I did this by pulling a Powershell image and running it in docker
 
 ```
 docker container run -it --rm -v=./:/stuff mcr.microsoft.com/powershell
@@ -44,7 +44,7 @@ If the file contains any other characters, the script outputs "Wrong format 1/0/
 
 The final check occurs while creating the contents of the dictionary `$blocks`.
 The script iterates through every line in the file by iterating through `$out`.
-Each line is split into an array of substrings using the `Split()` method where the deliminator is a space. This array is stored in the variable `$r`.
+Each line is split into an array of sub-strings using the `Split()` method where the deliminator is a space. This array is stored in the variable `$r`.
 A for loop with the variable `$j` is used to iterate through `$r`, as `$j` indexes into `$r` and goes from 0 to one less then the length of `$r`.
 
 The script checks if `$r[$j].Length` is equal to 6 for all `$r` and `$j`.
@@ -219,11 +219,11 @@ And now we have the original input! We can confirm this by running the script on
 
 ### Reversing Input ###
 
-Unfortunately, we're not done, because we have a bunch of blocks that don't seem to mean anything (no ascii art >:( )
+Unfortunately, we're not done, because we have a bunch of blocks that don't seem to mean anything (no ASCII art >:( )
 
 However, every row has only two unique numbers in their blocks, so maybe it's binary?
 
-My script [solveInput.py](./solveInput.py) assumes that numbers with more zeroes are 1's and converts each row of the input file into one giant binary string. I then split the strings into blocks of 8 bits and interprets them as ascii characters, which works for 4 out of 5 rows of blocks!
+My script [solveInput.py](./solveInput.py) assumes that numbers with more ones are 1's and converts each row of the input file into one giant binary string. I then split the strings into blocks of 8 bits and interprets them as ASCII characters, which works for 4 out of 5 rows of blocks!
 
 
 ```

@@ -257,7 +257,7 @@ b3 07 00 00 ;key3
 
 Where the ?? means that the byte is unneeded and can be any value
 
-Knowing this, we can can brute force these solutions as the guessable part of each key is only 4 bytes and we can narrow our search to printable characters! (Also the hint tells us the first part of the key is `D1v1` so we only need to bruteforce 3 sets of keys)
+Knowing this, we can can brute force these solutions as the guessable part of each key is only 4 bytes and we can narrow our search to printable characters! (Also the hint tells us the first part of the key is `D1v1` so we only need to brute force 3 sets of keys)
 
 The script [solve.py](./solve.py) brute forces all solutions and finds the solution in around 3 minutes.
 
